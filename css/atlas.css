@@ -1,0 +1,212 @@
+/* ═══════════════════════════════════════════════════════════════════
+   ATLAS OF MATHEMATICAL FORMS — museum plate aesthetic
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --bg: #06060D;
+  --ink: #E9E4D6;
+  --ink-dim: rgba(233, 228, 214, 0.52);
+  --ink-faint: rgba(233, 228, 214, 0.30);
+  --hairline: rgba(233, 228, 214, 0.16);
+  --accent: #8fd0ff;
+  --plate-bg: rgba(10, 10, 20, 0.55);
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --serif: "STIX Two Text", "Times New Roman", serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+#gl {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  display: block; cursor: grab; touch-action: none;
+}
+#gl.dragging { cursor: grabbing; }
+
+/* ————— frame ticks ————— */
+#frame { position: fixed; inset: 14px; pointer-events: none; z-index: 5; }
+#frame i {
+  position: absolute; width: 18px; height: 18px;
+  border-color: var(--hairline); border-style: solid; border-width: 0;
+}
+#frame i:nth-child(1) { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px; }
+#frame i:nth-child(2) { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+#frame i:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
+#frame i:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
+
+/* ————— masthead ————— */
+#masthead {
+  position: fixed; top: 30px; left: 38px; z-index: 6;
+  pointer-events: none; max-width: 46ch;
+}
+#eyebrow {
+  font-size: 10px; letter-spacing: 0.34em; color: var(--ink-dim);
+  margin-bottom: 10px;
+}
+#eyebrow b { color: var(--accent); font-weight: 400; transition: color 0.6s; }
+#title {
+  font-family: var(--serif); font-style: italic; font-weight: 500;
+  font-size: clamp(26px, 3.4vw, 42px); line-height: 1.05;
+  letter-spacing: 0.01em;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+/* ————— telemetry ————— */
+#telemetry {
+  position: fixed; top: 34px; right: 38px; z-index: 6;
+  text-align: right; font-size: 10px; letter-spacing: 0.14em;
+  color: var(--ink-dim); pointer-events: none; line-height: 1.9;
+}
+#telemetry .dim { color: var(--ink-faint); }
+#telemetry b { color: var(--ink); font-weight: 400; }
+
+/* ————— placard ————— */
+#placard {
+  position: fixed; left: 38px; bottom: 34px; z-index: 6;
+  max-width: 470px; padding: 18px 20px 16px;
+  background: var(--plate-bg);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+#plateNo {
+  font-size: 10px; letter-spacing: 0.30em; color: var(--ink-dim);
+  margin-bottom: 10px;
+}
+#plateNo b { color: var(--accent); font-weight: 400; transition: color 0.6s; }
+#formula {
+  font-size: 15px; color: var(--ink); min-height: 24px;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+#formula::-webkit-scrollbar { display: none; }
+#formula .katex { font-size: 1.02em; }
+#placard hr {
+  border: 0; border-top: 1px solid var(--hairline); margin: 12px 0 10px;
+}
+#caption {
+  font-family: var(--serif); font-size: 13.5px; line-height: 1.55;
+  color: var(--ink-dim);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.swap-out { opacity: 0 !important; transform: translateY(6px); }
+
+/* ————— console ————— */
+#console {
+  position: fixed; right: 38px; bottom: 34px; z-index: 7;
+  width: 254px; max-height: calc(100vh - 96px);
+  overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px;
+  background: var(--plate-bg);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  scrollbar-width: thin; scrollbar-color: var(--hairline) transparent;
+}
+#console::-webkit-scrollbar { width: 4px; }
+#console::-webkit-scrollbar-thumb { background: var(--hairline); }
+
+.nav { display: flex; align-items: center; justify-content: space-between; }
+.nav button.arrow {
+  background: none; border: 1px solid var(--hairline); color: var(--ink-dim);
+  font-family: var(--mono); font-size: 12px; width: 26px; height: 22px;
+  cursor: pointer; transition: color 0.2s, border-color 0.2s;
+}
+.nav button.arrow:hover { color: var(--ink); border-color: var(--ink-dim); }
+#dots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+#dots button {
+  width: 7px; height: 7px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--ink-dim); background: transparent; cursor: pointer;
+  transition: background 0.3s, border-color 0.3s;
+}
+#dots button.on { background: var(--accent); border-color: var(--accent); }
+
+details {
+  border-top: 1px solid var(--hairline); padding-top: 8px;
+}
+summary {
+  font-size: 9.5px; letter-spacing: 0.26em; color: var(--ink-dim);
+  cursor: pointer; list-style: none; user-select: none;
+  display: flex; align-items: center; gap: 7px;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: ""; width: 5px; height: 5px; background: var(--accent);
+  transform: rotate(45deg); transition: transform 0.25s, background 0.6s;
+  flex: none;
+}
+details[open] summary::before { transform: rotate(225deg); }
+details > div { margin-top: 10px; display: flex; flex-direction: column; gap: 9px; }
+
+.ctl { display: block; }
+.ctl .lbl {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 9px; letter-spacing: 0.18em; color: var(--ink-dim);
+  margin-bottom: 4px;
+}
+.ctl .lbl em {
+  font-style: normal; color: var(--ink); letter-spacing: 0.06em;
+}
+.ctl .lbl em sup { font-size: 7px; }
+.ctl input[type="range"] {
+  width: 100%; height: 18px; accent-color: var(--accent);
+  background: transparent; cursor: pointer;
+}
+
+.btns { flex-direction: row !important; gap: 8px !important; }
+.btns button {
+  flex: 1; background: none; border: 1px solid var(--hairline);
+  color: var(--ink-dim); font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.18em; padding: 7px 0; cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.btns button:hover { color: var(--ink); border-color: var(--ink-dim); }
+
+#densWarn {
+  display: none; font-size: 9px; letter-spacing: 0.1em;
+  color: var(--accent); line-height: 1.5;
+}
+#densWarn.show { display: block; }
+
+/* ————— hint / lost ————— */
+#hint {
+  position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 6; font-size: 9px; letter-spacing: 0.22em; color: var(--ink-faint);
+  pointer-events: none; white-space: nowrap;
+}
+#lost {
+  position: fixed; inset: 0; z-index: 20; display: none;
+  align-items: center; justify-content: center; text-align: center;
+  background: rgba(6, 6, 13, 0.92); padding: 24px;
+  font-size: 12px; letter-spacing: 0.14em; line-height: 2; color: var(--ink-dim);
+}
+#lost.show { display: flex; }
+#lost b { color: var(--ink); font-weight: 400; }
+
+/* ————— hide UI (H key) ————— */
+body.ui-hidden #masthead, body.ui-hidden #telemetry, body.ui-hidden #placard,
+body.ui-hidden #console, body.ui-hidden #hint, body.ui-hidden #frame {
+  opacity: 0; pointer-events: none; transition: opacity 0.4s;
+}
+#masthead, #telemetry, #placard, #console, #hint, #frame {
+  transition: opacity 0.4s;
+}
+
+/* ————— small screens ————— */
+@media (max-width: 860px) {
+  #masthead { top: 20px; left: 20px; }
+  #telemetry { display: none; }
+  #hint { display: none; }
+  #frame { inset: 8px; }
+  #placard {
+    left: 12px; right: 12px; bottom: 190px; max-width: none;
+    padding: 12px 14px 10px;
+  }
+  #caption { display: none; }
+  #console {
+    left: 12px; right: 12px; bottom: 12px; width: auto;
+    max-height: 168px;
+  }
+}

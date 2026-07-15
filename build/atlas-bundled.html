@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Atlas of Mathematical Forms</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@1,400;1,500&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   ATLAS OF MATHEMATICAL FORMS — museum plate aesthetic
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --bg: #06060D;
+  --ink: #E9E4D6;
+  --ink-dim: rgba(233, 228, 214, 0.52);
+  --ink-faint: rgba(233, 228, 214, 0.30);
+  --hairline: rgba(233, 228, 214, 0.16);
+  --accent: #8fd0ff;
+  --plate-bg: rgba(10, 10, 20, 0.55);
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --serif: "STIX Two Text", "Times New Roman", serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+#gl {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  display: block; cursor: grab; touch-action: none;
+}
+#gl.dragging { cursor: grabbing; }
+
+/* ————— frame ticks ————— */
+#frame { position: fixed; inset: 14px; pointer-events: none; z-index: 5; }
+#frame i {
+  position: absolute; width: 18px; height: 18px;
+  border-color: var(--hairline); border-style: solid; border-width: 0;
+}
+#frame i:nth-child(1) { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px; }
+#frame i:nth-child(2) { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+#frame i:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
+#frame i:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
+
+/* ————— masthead ————— */
+#masthead {
+  position: fixed; top: 30px; left: 38px; z-index: 6;
+  pointer-events: none; max-width: 46ch;
+}
+#eyebrow {
+  font-size: 10px; letter-spacing: 0.34em; color: var(--ink-dim);
+  margin-bottom: 10px;
+}
+#eyebrow b { color: var(--accent); font-weight: 400; transition: color 0.6s; }
+#title {
+  font-family: var(--serif); font-style: italic; font-weight: 500;
+  font-size: clamp(26px, 3.4vw, 42px); line-height: 1.05;
+  letter-spacing: 0.01em;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+/* ————— telemetry ————— */
+#telemetry {
+  position: fixed; top: 34px; right: 38px; z-index: 6;
+  text-align: right; font-size: 10px; letter-spacing: 0.14em;
+  color: var(--ink-dim); pointer-events: none; line-height: 1.9;
+}
+#telemetry .dim { color: var(--ink-faint); }
+#telemetry b { color: var(--ink); font-weight: 400; }
+
+/* ————— placard ————— */
+#placard {
+  position: fixed; left: 38px; bottom: 34px; z-index: 6;
+  max-width: 470px; padding: 18px 20px 16px;
+  background: var(--plate-bg);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+#plateNo {
+  font-size: 10px; letter-spacing: 0.30em; color: var(--ink-dim);
+  margin-bottom: 10px;
+}
+#plateNo b { color: var(--accent); font-weight: 400; transition: color 0.6s; }
+#formula {
+  font-size: 15px; color: var(--ink); min-height: 24px;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+#formula::-webkit-scrollbar { display: none; }
+#formula .katex { font-size: 1.02em; }
+#placard hr {
+  border: 0; border-top: 1px solid var(--hairline); margin: 12px 0 10px;
+}
+#caption {
+  font-family: var(--serif); font-size: 13.5px; line-height: 1.55;
+  color: var(--ink-dim);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.swap-out { opacity: 0 !important; transform: translateY(6px); }
+
+/* ————— console ————— */
+#console {
+  position: fixed; right: 38px; bottom: 34px; z-index: 7;
+  width: 254px; max-height: calc(100vh - 96px);
+  overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px;
+  background: var(--plate-bg);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  scrollbar-width: thin; scrollbar-color: var(--hairline) transparent;
+}
+#console::-webkit-scrollbar { width: 4px; }
+#console::-webkit-scrollbar-thumb { background: var(--hairline); }
+
+.nav { display: flex; align-items: center; justify-content: space-between; }
+.nav button.arrow {
+  background: none; border: 1px solid var(--hairline); color: var(--ink-dim);
+  font-family: var(--mono); font-size: 12px; width: 26px; height: 22px;
+  cursor: pointer; transition: color 0.2s, border-color 0.2s;
+}
+.nav button.arrow:hover { color: var(--ink); border-color: var(--ink-dim); }
+#dots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+#dots button {
+  width: 7px; height: 7px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--ink-dim); background: transparent; cursor: pointer;
+  transition: background 0.3s, border-color 0.3s;
+}
+#dots button.on { background: var(--accent); border-color: var(--accent); }
+
+details {
+  border-top: 1px solid var(--hairline); padding-top: 8px;
+}
+summary {
+  font-size: 9.5px; letter-spacing: 0.26em; color: var(--ink-dim);
+  cursor: pointer; list-style: none; user-select: none;
+  display: flex; align-items: center; gap: 7px;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: ""; width: 5px; height: 5px; background: var(--accent);
+  transform: rotate(45deg); transition: transform 0.25s, background 0.6s;
+  flex: none;
+}
+details[open] summary::before { transform: rotate(225deg); }
+details > div { margin-top: 10px; display: flex; flex-direction: column; gap: 9px; }
+
+.ctl { display: block; }
+.ctl .lbl {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 9px; letter-spacing: 0.18em; color: var(--ink-dim);
+  margin-bottom: 4px;
+}
+.ctl .lbl em {
+  font-style: normal; color: var(--ink); letter-spacing: 0.06em;
+}
+.ctl .lbl em sup { font-size: 7px; }
+.ctl input[type="range"] {
+  width: 100%; height: 18px; accent-color: var(--accent);
+  background: transparent; cursor: pointer;
+}
+
+.btns { flex-direction: row !important; gap: 8px !important; }
+.btns button {
+  flex: 1; background: none; border: 1px solid var(--hairline);
+  color: var(--ink-dim); font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.18em; padding: 7px 0; cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.btns button:hover { color: var(--ink); border-color: var(--ink-dim); }
+
+#densWarn {
+  display: none; font-size: 9px; letter-spacing: 0.1em;
+  color: var(--accent); line-height: 1.5;
+}
+#densWarn.show { display: block; }
+
+/* ————— hint / lost ————— */
+#hint {
+  position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 6; font-size: 9px; letter-spacing: 0.22em; color: var(--ink-faint);
+  pointer-events: none; white-space: nowrap;
+}
+#lost {
+  position: fixed; inset: 0; z-index: 20; display: none;
+  align-items: center; justify-content: center; text-align: center;
+  background: rgba(6, 6, 13, 0.92); padding: 24px;
+  font-size: 12px; letter-spacing: 0.14em; line-height: 2; color: var(--ink-dim);
+}
+#lost.show { display: flex; }
+#lost b { color: var(--ink); font-weight: 400; }
+
+/* ————— hide UI (H key) ————— */
+body.ui-hidden #masthead, body.ui-hidden #telemetry, body.ui-hidden #placard,
+body.ui-hidden #console, body.ui-hidden #hint, body.ui-hidden #frame {
+  opacity: 0; pointer-events: none; transition: opacity 0.4s;
+}
+#masthead, #telemetry, #placard, #console, #hint, #frame {
+  transition: opacity 0.4s;
+}
+
+/* ————— small screens ————— */
+@media (max-width: 860px) {
+  #masthead { top: 20px; left: 20px; }
+  #telemetry { display: none; }
+  #hint { display: none; }
+  #frame { inset: 8px; }
+  #placard {
+    left: 12px; right: 12px; bottom: 190px; max-width: none;
+    padding: 12px 14px 10px;
+  }
+  #caption { display: none; }
+  #console {
+    left: 12px; right: 12px; bottom: 12px; width: auto;
+    max-height: 168px;
+  }
+}
+
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div id="frame"><i></i><i></i><i></i><i></i></div>
+
+<header id="masthead">
+  <div id="eyebrow">ATLAS OF MATHEMATICAL FORMS &nbsp;·&nbsp; <b>POINT-DENSITY EDITION</b></div>
+  <h1 id="title">The Hopf Fibration</h1>
+</header>
+
+<div id="telemetry">
+  <div id="gpuLine">GPU</div>
+  <div><b id="fps">–</b> FPS &nbsp;·&nbsp; <b id="pps">–</b> PTS/S</div>
+  <div class="dim">BRIGHTNESS = POINT DENSITY ≈ MEASURE</div>
+</div>
+
+<section id="placard">
+  <div id="plateNo"><b id="plateRoman">PLATE I</b> <span id="plateOf">/ XII</span></div>
+  <div id="formula"></div>
+  <hr>
+  <p id="caption"></p>
+</section>
+
+<aside id="console">
+  <div class="nav">
+    <button class="arrow" id="prev" aria-label="Previous plate">‹</button>
+    <div id="dots" role="tablist"></div>
+    <button class="arrow" id="next" aria-label="Next plate">›</button>
+  </div>
+
+  <details id="panelPlate" open>
+    <summary>PLATE PARAMETERS</summary>
+    <div>
+      <div id="plateParams"></div>
+      <div class="btns"><button id="rand">RANDOMIZE</button><button id="resetP">RESET</button></div>
+    </div>
+  </details>
+
+  <details id="panelRender" open>
+    <summary>RENDER</summary>
+    <div>
+      <div id="globalParams"></div>
+      <div id="densWarn">HEAVY DENSITY — EXPECT LOW FPS ON MODEST GPUS</div>
+      <div class="btns"><button id="pause">PAUSE ▎▎</button><button id="shot">EXPORT PNG</button></div>
+    </div>
+  </details>
+</aside>
+
+<div id="hint">DRAG · SCROLL · ← → PLATES · SPACE PAUSE · R RANDOMIZE · S EXPORT · H HIDE</div>
+
+<div id="lost">
+  <div><b>SIGNAL LOST</b><br>THE GPU CONTEXT WAS INTERRUPTED — LOWER THE DENSITY AND RELOAD.</div>
+</div>
+
+<!-- core: namespace + shared GLSL -->
+<script>
+/* ── js/core/registry.js ── */
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════
+   ATLAS REGISTRY
+   Plates register themselves here. Each plate contributes:
+     - metadata (name, roman numeral, accent, formula, caption, camera)
+     - up to 8 "levers" (params) mapped to P[0..7] in its shader
+     - a GLSL function:  vec3 shape_<id>(vec2 q, vec4 rnd, uint seed,
+                                         float P[8], out vec3 col)
+   The full vertex shader is assembled at boot by concatenating every
+   plate's GLSL and generating the dispatcher. Adding a plate = adding
+   one file to js/plates/ and one <script> tag to index.html.
+   ═══════════════════════════════════════════════════════════════════ */
+globalThis.Atlas = {
+  plates: [],
+
+  registerPlate(p) {
+    p.index = this.plates.length;
+    p.params = p.params || [];
+    if (p.params.length > 8) throw new Error(p.id + ": max 8 params");
+    this.plates.push(p);
+  },
+
+  GLSL: {}, /* filled by glsl-lib.js */
+
+  buildVertexShader() {
+    const shapes = this.plates.map(p => p.glsl).join("\n");
+    const dispatch = this.plates
+      .map((p, i) => `  if(m == ${i}) return shape_${p.id}(q, rnd, seed, P, col);`)
+      .join("\n");
+    return (
+      this.GLSL.vertHeader +
+      "\n" + shapes + "\n" +
+      "vec3 shape(int m, vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){\n" +
+      dispatch + "\n" +
+      "  col = vec3(0.0); return vec3(0.0);\n}\n" +
+      this.GLSL.vertMain
+    );
+  }
+};
+
+</script>
+<script>
+/* ── js/core/glsl-lib.js ── */
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════
+   SHARED GLSL
+   Every point is synthesized in the vertex shader from gl_VertexID —
+   no vertex buffers exist anywhere in this project. The low-
+   discrepancy R2 sequence is computed in exact 32-bit fixed point,
+   because plain float fract(i*phi) runs out of mantissa past ~16M
+   indices and the cloud would collapse onto stripes.
+   ═══════════════════════════════════════════════════════════════════ */
+
+Atlas.GLSL.vertHeader = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform mat4  uVP;
+uniform float uT;
+uniform float uMorph;
+uniform int   uModeA;
+uniform int   uModeB;
+uniform float uPt;
+uniform float uIntensity;
+uniform float uGainA;
+uniform float uGainB;
+uniform float uPA[8];   /* levers of plate A */
+uniform float uPB[8];   /* levers of plate B */
+
+out vec3 vCol;
+
+const float PI  = 3.14159265359;
+const float TAU = 6.28318530718;
+
+vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d){
+  return a + b*cos(TAU*(c*t + d));
+}
+uint hashu(uint x){
+  x ^= x >> 16; x *= 0x7feb352du;
+  x ^= x >> 15; x *= 0x846ca68bu;
+  x ^= x >> 16; return x;
+}
+float u2f(uint x){ return float(x) * 2.3283064365386963e-10; }
+`;
+
+Atlas.GLSL.vertMain = `
+void main(){
+  uint ia = uint(gl_VertexID);
+  /* R2 low-discrepancy point in exact fixed point */
+  vec2 q = vec2(u2f(ia * 3242174889u), u2f(ia * 2447445414u));
+  uint h1 = hashu(ia);
+  uint h2 = hashu(h1);
+  uint h3 = hashu(h2);
+  uint h4 = hashu(h3);
+  vec4 rnd = vec4(u2f(h1), u2f(h2), u2f(h3), u2f(h4));
+
+  float PA[8]; float PB[8];
+  for(int i = 0; i < 8; i++){ PA[i] = uPA[i]; PB[i] = uPB[i]; }
+
+  vec3 col;
+  vec3 p = shape(uModeA, q, rnd, h4, PA, col);
+  float g = uGainA;
+  if(uMorph > 0.0005){
+    vec3 colB;
+    vec3 pB = shape(uModeB, q, rnd, h4, PB, colB);
+    float m = smoothstep(0.0, 1.0, clamp(uMorph*1.4 - rnd.w*0.4, 0.0, 1.0));
+    p   = mix(p, pB, m);
+    col = mix(col, colB, m);
+    g   = mix(uGainA, uGainB, m);
+  }
+  gl_Position  = uVP * vec4(p, 1.0);
+  gl_PointSize = uPt;
+  vCol = col * (uIntensity * g);
+}`;
+
+Atlas.GLSL.pointFrag = `#version 300 es
+precision highp float;
+in vec3 vCol;
+out vec4 o;
+void main(){ o = vec4(vCol, 1.0); }`;
+
+Atlas.GLSL.quadVert = `#version 300 es
+out vec2 vUv;
+void main(){
+  vec2 v = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  vUv = v;
+  gl_Position = vec4(v*2.0 - 1.0, 0.0, 1.0);
+}`;
+
+/* Tonemap + color grade: exposure -> hue rotate -> saturation ->
+   gamma -> vignette -> dither. Brightness in = accumulated density. */
+Atlas.GLSL.tonemapFrag = `#version 300 es
+precision highp float;
+uniform sampler2D uTex;
+uniform float uExp;
+uniform float uGamma;
+uniform float uSat;
+uniform mat3  uHueM;
+in vec2 vUv;
+out vec4 o;
+void main(){
+  vec3 h = texture(uTex, vUv).rgb;
+  vec3 c = 1.0 - exp(-h * uExp);
+  c = uHueM * c;
+  float lum = dot(c, vec3(0.299, 0.587, 0.114));
+  c = mix(vec3(lum), c, uSat);
+  c = pow(max(c, vec3(0.0)), vec3(uGamma));
+  float d2 = dot(vUv - 0.5, vUv - 0.5);
+  float vig = 1.0 - 0.55*d2;
+  c *= vig;
+  c += vec3(0.012, 0.013, 0.026) * vig;
+  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  c += (n - 0.5) / 255.0;
+  o = vec4(c, 1.0);
+}`;
+
+/* Persistence: copy previous accumulation, decayed. Points are then
+   added on top, so the trail is itself part of the measure. */
+Atlas.GLSL.fadeFrag = `#version 300 es
+precision highp float;
+uniform sampler2D uTex;
+uniform float uPersist;
+in vec2 vUv;
+out vec4 o;
+void main(){ o = texture(uTex, vUv) * uPersist; }`;
+
+</script>
+
+<!-- plates: one file each; add yours here -->
+<script>
+/* ── js/plates/01-hopf.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "hopf",
+  name: "The Hopf Fibration",
+  roman: "I",
+  accent: "#8fd0ff",
+  tex: "h:\\;S^3\\!\\to S^2,\\qquad h(z_1,z_2)=\\bigl(2\\,z_1\\bar z_2,\\;|z_1|^2-|z_2|^2\\bigr),\\qquad h^{-1}(p)\\cong S^1",
+  plain: "h : S\u00b3 \u2192 S\u00b2,   h(z\u2081,z\u2082) = (2z\u2081z\u0304\u2082, |z\u2081|\u00b2\u2212|z\u2082|\u00b2),   h\u207b\u00b9(p) \u2245 S\u00b9",
+  caption: "Four-dimensional space, flattened. Each closed curve is the complete preimage of one point of an ordinary sphere under the Hopf map \u2014 and any two of these circles, chosen anywhere, are linked exactly once. Hue names the base point on S\u00b2; the churn is a rigid rotation of the 3-sphere carrying fibers through the projection pole.",
+  cam: { dist: 3.5, pitch: 0.32, tgtY: 0.0, rot: 0.05 },
+  gain: 1.0,
+  params: [
+    { label: "BAND LOBES",   min: 0,    max: 6,   step: 1,    def: 2    },
+    { label: "BAND SWING",   min: 0,    max: 1.4, step: 0.01, def: 0.92 },
+    { label: "4D SPIN XW",   min: -0.4, max: 0.4, step: 0.005,def: 0.11 },
+    { label: "4D SPIN YZ",   min: -0.4, max: 0.4, step: 0.005,def: 0.07 },
+    { label: "SCALE",        min: 0.15, max: 0.6, step: 0.005,def: 0.36 }
+  ],
+  glsl: `
+vec3 shape_hopf(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float s   = q.y;                       /* position along base curve on S2 */
+  float a   = TAU * q.x;                 /* position along the fiber circle */
+  float phi = TAU * s;
+  float theta = 0.5*PI + P[1]*sin(P[0]*phi + 0.23*uT);
+  float ch = cos(0.5*theta), sh = sin(0.5*theta);
+  vec4 p4 = vec4(ch*cos(a), ch*sin(a), sh*cos(a+phi), sh*sin(a+phi));
+  /* rigid double rotation of S3 */
+  float r1 = P[2]*uT, r2 = P[3]*uT;
+  float c1 = cos(r1), s1 = sin(r1), c2 = cos(r2), s2 = sin(r2);
+  p4 = vec4( c1*p4.x - s1*p4.w,
+             c2*p4.y - s2*p4.z,
+             s2*p4.y + c2*p4.z,
+             s1*p4.x + c1*p4.w );
+  /* stereographic projection S3 -> R3 */
+  float d = max(1.0 - p4.w, 0.035);
+  vec3 p = (p4.xyz / d) * P[4];
+  col = pal(s, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col *= 0.8 + 0.4*rnd.x;
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/02-harmonics.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "harm",
+  name: "Spherical Harmonics",
+  roman: "II",
+  accent: "#ffb066",
+  tex: "\\nabla^2_{S^2}\\,Y_\\ell^{m} \\;=\\; -\\,\\ell(\\ell+1)\\,Y_\\ell^{m},\\qquad f=\\textstyle\\sum_k w_k(t)\\,Y_{\\ell_k}^{m_k}",
+  plain: "\u2207\u00b2 Y\u2097\u1d50 = \u2212\u2113(\u2113+1) Y\u2097\u1d50,   f = \u03a3 w\u2096(t) Y\u2097\u1d50",
+  caption: "The vibrational modes of a sphere: eigenfunctions of the Laplacian, and the angular shapes of every atomic orbital. Warm lobes are positive amplitude, cold lobes negative, and the radius is drawn by the function itself. The four weight levers steer the superposition by hand; DRIFT lets it wander on its own.",
+  cam: { dist: 3.0, pitch: 0.28, tgtY: 0.0, rot: 0.06 },
+  gain: 1.1,
+  params: [
+    { label: "WEIGHT Y\u2082\u2070", min: -1.2, max: 1.2,  step: 0.01, def: 1.0  },
+    { label: "WEIGHT Y\u2083\u00b2", min: -1.2, max: 1.2,  step: 0.01, def: 0.7  },
+    { label: "WEIGHT Y\u2084\u00b3", min: -1.2, max: 1.2,  step: 0.01, def: 0.6  },
+    { label: "WEIGHT Y\u2085\u2075", min: -1.2, max: 1.2,  step: 0.01, def: 0.5  },
+    { label: "DRIFT",              min: 0,    max: 1,    step: 0.01, def: 0.6  },
+    { label: "AMPLITUDE",          min: 0,    max: 1.2,  step: 0.01, def: 0.62 },
+    { label: "SHELL FUZZ",         min: 0,    max: 0.35, step: 0.005,def: 0.05 }
+  ],
+  glsl: `
+vec3 shape_harm(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float ct = 1.0 - 2.0*q.x;              /* uniform on the sphere */
+  float st = sqrt(max(0.0, 1.0 - ct*ct));
+  float ph = TAU * q.y;
+  vec3 dir = vec3(st*cos(ph), ct, st*sin(ph));
+  float s2 = st*st;
+  float Y20 = 0.5*(3.0*ct*ct - 1.0);
+  float Y32 = 2.2 * s2*ct*cos(2.0*ph);
+  float Y43 = 3.4 * s2*st*ct*cos(3.0*ph);
+  float Y55 = 4.2 * s2*s2*st*cos(5.0*ph);
+  float w0 = P[0] + P[4]*cos(0.19*uT);
+  float w1 = P[1] + P[4]*cos(0.23*uT + 2.1);
+  float w2 = P[2] + P[4]*cos(0.17*uT + 4.2);
+  float w3 = P[3] + P[4]*cos(0.13*uT + 1.1);
+  float f = 0.30*(w0*Y20 + w1*Y32 + w2*Y43 + w3*Y55);
+  float r = 0.58 + P[5]*f;
+  r *= 1.0 + P[6]*(rnd.y - 0.5);
+  vec3 p = dir * max(r, 0.03) * 1.05;
+  col = mix(vec3(0.22, 0.58, 1.0), vec3(1.0, 0.55, 0.20), step(0.0, f))
+      * (0.20 + 1.6*abs(f));
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/03-logz.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "logz",
+  name: "The Riemann Surface of log z",
+  roman: "III",
+  accent: "#a3adff",
+  tex: "\\log z \\;=\\; \\ln|z| \\;+\\; i\\bigl(\\arg z + 2\\pi n\\bigr),\\qquad n\\in\\mathbb{Z}",
+  plain: "log z = ln|z| + i(arg z + 2\u03c0n),  n \u2208 \u2124",
+  caption: "The complex logarithm refuses to be a function: circle the origin once and its value climbs by 2\u03c0i, forever. Stacking every answer yields this helicoid, whose glowing graticule is the conformal image of the w-plane grid. The surface rotates inside \u2102\u00b2, trading height between Im\u2009log\u2009z and Re\u2009log\u2009z; hue repeats each turn while height does not \u2014 that is monodromy.",
+  cam: { dist: 3.3, pitch: 0.34, tgtY: 0.0, rot: 0.05 },
+  gain: 1.15,
+  params: [
+    { label: "SHEETS",        min: 1,    max: 8,   step: 1,    def: 5    },
+    { label: "\u2102\u00b2 ROTATION", min: 0, max: 0.6, step: 0.005, def: 0.22 },
+    { label: "GRATICULE",     min: 0,    max: 3,   step: 0.01, def: 1.0  },
+    { label: "INNER RADIUS",  min: 0.02, max: 0.4, step: 0.005,def: 0.07 },
+    { label: "OUTER RADIUS",  min: 0.6,  max: 2.0, step: 0.01, def: 1.45 },
+    { label: "HEIGHT",        min: 0.2,  max: 2.0, step: 0.01, def: 1.0  }
+  ],
+  glsl: `
+vec3 shape_logz(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  /* area-uniform sampling of the annulus, spread over P[0] sheets */
+  float rho = sqrt(mix(P[3]*P[3], P[4]*P[4], q.x));
+  float th  = (q.y - 0.5) * TAU * P[0];
+  float re  = log(rho);
+  float im  = th;
+  float beta = P[1]*uT;
+  float y = (cos(beta)*0.115*im + sin(beta)*0.55*re) * P[5];
+  vec3 p = vec3(rho*cos(th), y, rho*sin(th)) * 0.95;
+  /* conformal image of the w-plane grid */
+  float gx = abs(fract(re*2.2*P[2]) - 0.5);
+  float gy = abs(fract(im*0.7*P[2]) - 0.5);
+  float line = smoothstep(0.12, 0.02, min(gx, gy));
+  col = pal(fract(th/TAU), vec3(0.48), vec3(0.42), vec3(1.0), vec3(0.02, 0.36, 0.70));
+  col = col*0.30 + vec3(0.90, 0.92, 1.0)*line*0.95;
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/04-dejong.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "jong",
+  name: "A Strange Attractor",
+  roman: "IV",
+  accent: "#ff9ed0",
+  tex: "x_{n+1}=\\sin(a\\,y_n)-\\cos(b\\,x_n),\\qquad y_{n+1}=\\sin(c\\,x_n)-\\cos(d\\,y_n)",
+  plain: "x\u2099\u208a\u2081 = sin(ay\u2099) \u2212 cos(bx\u2099),   y\u2099\u208a\u2081 = sin(cx\u2099) \u2212 cos(dy\u2099)",
+  caption: "Millions of independent trajectories of the same two-line map (Peter de Jong's), each plotted after a handful of iterations. They forget their origins and condense onto the attractor: brightness is the invariant measure itself, a Monte-Carlo estimate that sharpens with every added point. Depth is a Takens delay-embedding; color is local speed. Steer a, b, c, d by hand \u2014 almost every setting hides a different creature.",
+  cam: { dist: 3.0, pitch: 0.22, tgtY: 0.0, rot: 0.04 },
+  gain: 0.55,
+  params: [
+    { label: "A",          min: -2.8, max: 2.8, step: 0.005, def:  1.40 },
+    { label: "B",          min: -2.8, max: 2.8, step: 0.005, def: -2.30 },
+    { label: "C",          min: -2.8, max: 2.8, step: 0.005, def:  2.40 },
+    { label: "D",          min: -2.8, max: 2.8, step: 0.005, def: -2.10 },
+    { label: "DRIFT",      min: 0,    max: 1,   step: 0.01,  def: 0.4  },
+    { label: "ITERATIONS", min: 4,    max: 24,  step: 1,     def: 14   },
+    { label: "DEPTH",      min: 0,    max: 0.8, step: 0.01,  def: 0.31 }
+  ],
+  glsl: `
+vec3 shape_jong(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  vec2 pt  = vec2(rnd.x, rnd.y)*4.0 - 2.0;   /* hashed initial condition */
+  vec2 ptp = pt;
+  float a = P[0] + 0.52*P[4]*sin(0.041*uT);
+  float b = P[1] + 0.37*P[4]*sin(0.033*uT + 1.4);
+  float c = P[2] + 0.36*P[4]*sin(0.037*uT + 2.9);
+  float d = P[3] + 0.41*P[4]*sin(0.029*uT + 4.2);
+  for(int j = 0; j < 24; j++){
+    if(float(j) >= P[5]) break;
+    ptp = pt;
+    pt  = vec2(sin(a*pt.y) - cos(b*pt.x),
+               sin(c*pt.x) - cos(d*pt.y));
+  }
+  float sp = length(pt - ptp);
+  col = pal(clamp(sp*0.30, 0.0, 1.0),
+            vec3(0.46, 0.34, 0.55), vec3(0.44, 0.33, 0.40),
+            vec3(1.0, 0.95, 0.80), vec3(0.65, 0.40, 0.10));
+  /* third axis: Takens delay coordinate */
+  return vec3(pt.x*0.62, pt.y*0.62, ptp.x*P[6]);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/05-waves.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "wave",
+  name: "Interference",
+  roman: "V",
+  accent: "#7fe8dc",
+  tex: "\\psi(\\mathbf{x},t)=\\sum_{j}\\frac{A}{c+r_j}\\,\\sin\\!\\bigl(\\kappa_j r_j-\\omega_j t\\bigr),\\qquad \\omega=\\kappa^{\\,p}",
+  plain: "\u03c8(x,t) = \u03a3 A/(c+r\u2c7c) \u00b7 sin(\u03ba\u2c7cr\u2c7c \u2212 \u03c9\u2c7ct),   \u03c9 = \u03ba\u1d56",
+  caption: "Point sources, nothing more. Crests meet crests, troughs annihilate crests, and the superposition principle writes its interference fringes across the whole surface. The DISPERSION lever is the exponent in \u03c9 = \u03ba\u1d56: at p = \u00bd you have deep-water gravity waves where long waves outrun short ones; at p = 1 every wavelength travels together, like light in vacuum.",
+  cam: { dist: 3.7, pitch: 0.55, tgtY: 0.0, rot: 0.04 },
+  gain: 1.35,
+  params: [
+    { label: "SOURCES",    min: 1,    max: 6,   step: 1,     def: 3    },
+    { label: "WAVENUMBER", min: 2,    max: 16,  step: 0.05,  def: 7    },
+    { label: "AMPLITUDE",  min: 0,    max: 0.3, step: 0.005, def: 0.12 },
+    { label: "DISPERSION", min: 0.05, max: 1,   step: 0.01,  def: 0.5  },
+    { label: "SOURCE RING",min: 0,    max: 1.8, step: 0.01,  def: 1.05 },
+    { label: "DAMPING",    min: 0.1,  max: 2,   step: 0.01,  def: 0.55 }
+  ],
+  glsl: `
+vec3 shape_wave(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  vec2 xz = (q - 0.5) * 3.6;
+  float h = 0.0;
+  for(int j = 0; j < 6; j++){
+    if(float(j) >= P[0]) break;
+    float fa = float(j)*TAU/max(P[0], 1.0) + 0.10*uT;
+    vec2 src = P[4]*vec2(cos(fa), sin(fa));
+    float r = length(xz - src);
+    float k = P[1] + 3.0*float(j);
+    h += P[2]/(P[5] + r) * sin(k*r - 2.2*pow(k, P[3])*uT);
+  }
+  vec3 p = vec3(xz.x, h*1.05, xz.y);
+  float hn = clamp(h*4.5, -1.0, 1.0);
+  col = mix(vec3(0.03, 0.30, 0.46), vec3(0.80, 0.97, 1.0), hn*0.5 + 0.5);
+  col *= 0.35 + 0.9*abs(hn);
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/06-mandelbrot.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "mand",
+  name: "The Mandelbrot Set",
+  roman: "VI",
+  accent: "#ffc069",
+  tex: "z_{n+1}=z_n^{2}+c,\\qquad \\nu \\;=\\; n+1-\\log_2\\ln|z_n|\\;\\;\\text{(smooth escape time)}",
+  plain: "z\u2099\u208a\u2081 = z\u2099\u00b2 + c,   \u03bd = n + 1 \u2212 log\u2082 ln|z\u2099|",
+  caption: "Iterate z\u00b2 + c and ask one question of every point c in the plane: does the orbit escape? The answer, graded by the smooth escape time \u03bd, is raised into relief \u2014 spires climb where orbits linger near the boundary, and the glowing mesa is the set itself, where they never leave. Each point samples c at random, so the infinitely intricate boundary anti-aliases itself. Zoom and pan live in the levers; raise ITERATIONS as you go deeper.",
+  cam: { dist: 3.4, pitch: 0.52, tgtY: 0.30, rot: 0.03 },
+  gain: 0.9,
+  params: [
+    { label: "ITERATIONS", min: 16,   max: 120, step: 1,     def: 60    },
+    { label: "ZOOM",       min: 1,    max: 60,  step: 0.1,   def: 1     },
+    { label: "CENTER RE",  min: -2.2, max: 0.8, step: 0.001, def: -0.70 },
+    { label: "CENTER IM",  min: -1.2, max: 1.2, step: 0.001, def: 0.0   },
+    { label: "HEIGHT",     min: 0,    max: 1.6, step: 0.01,  def: 0.8   },
+    { label: "PALETTE CYCLE", min: 0, max: 3,   step: 0.01,  def: 0.9   }
+  ],
+  glsl: `
+vec3 shape_mand(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float K = P[0];
+  /* sample c at random inside the current window: stochastic AA */
+  vec2 win = vec2(mix(-1.55, 1.55, q.x), (q.y - 0.5)*2.6) + (rnd.xy - 0.5)*0.002;
+  vec2 c = vec2(P[2], P[3]) + win / P[1];
+  vec2 z = vec2(0.0);
+  float m2 = 0.0;
+  float n = K;
+  for(int j = 0; j < 120; j++){
+    if(float(j) >= K) break;
+    z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;
+    m2 = dot(z, z);
+    if(m2 > 40.0){ n = float(j); break; }
+  }
+  float hgt;
+  if(n >= K){
+    hgt = P[4];
+    col = vec3(0.60, 0.16, 0.05)*0.5;
+  } else {
+    float nu = n + 1.0 - log2(max(1.0, 0.5*log(m2)));
+    float x = clamp(nu/K, 0.0, 1.0);
+    hgt = P[4]*pow(x, 2.0);
+    col = pal(fract(P[5]*x + 0.02*uT),
+              vec3(0.50, 0.33, 0.20), vec3(0.50, 0.38, 0.30),
+              vec3(1.0), vec3(0.00, 0.12, 0.30));
+    col *= 0.22 + 1.15*x;
+  }
+  /* plot in the window frame so the view stays put while zooming */
+  return vec3(win.x*0.72, hgt, win.y*0.72);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/07-chaosgame.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "ifs",
+  name: "The Chaos Game",
+  roman: "VII",
+  accent: "#b8f78f",
+  tex: "p_{k+1} = (1-r)\\,p_k + r\\,v_{j_k},\\qquad j_k \\sim \\mathrm{Uniform}\\{1,\\dots,n\\}",
+  plain: "p\u2096\u208a\u2081 = (1\u2212r)p\u2096 + r\u00b7v\u2c7c,   j ~ Uniform{1..n}",
+  caption: "Pick a random vertex, step a fraction r toward it, repeat. Nothing else. For r = \u00bd and four vertices the orbit's closure is the Sierpi\u0144ski tetrahedron \u2014 an iterated function system whose attractor is the unique fixed point of Hutchinson's contraction on the space of compact sets. Slide r, add a twist per step, or change the vertex count, and you walk through an entire family of self-similar measures. Hue can trace either radius or the last symbolic address.",
+  cam: { dist: 3.2, pitch: 0.30, tgtY: 0.0, rot: 0.05 },
+  gain: 0.7,
+  params: [
+    { label: "VERTICES",    min: 3,    max: 8,    step: 1,     def: 4    },
+    { label: "CONTRACTION", min: 0.25, max: 0.75, step: 0.005, def: 0.5  },
+    { label: "TWIST / STEP",min: -0.7, max: 0.7,  step: 0.005, def: 0    },
+    { label: "ITERATIONS",  min: 6,    max: 28,   step: 1,     def: 18   },
+    { label: "HUE: RADIUS\u2194ADDRESS", min: 0, max: 1, step: 0.01, def: 0.7 }
+  ],
+  glsl: `
+vec3 ifs_vertex(float k, float n){
+  /* n vertices spread on the sphere by a golden spiral */
+  float z = 1.0 - 2.0*(k + 0.5)/n;
+  float r = sqrt(max(0.0, 1.0 - z*z));
+  float a = k * 2.39996322973;
+  return vec3(r*cos(a), z, r*sin(a));
+}
+vec3 shape_ifs(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float n = max(P[0], 3.0);
+  vec3 pt = rnd.xyz*2.0 - 1.0;           /* hashed starting point */
+  uint h = seed;
+  float last = 0.0;
+  float ca = cos(P[2]), sa = sin(P[2]);
+  for(int j = 0; j < 28; j++){
+    if(float(j) >= P[3]) break;
+    h = hashu(h);                        /* the coin flips */
+    float k = floor(u2f(h)*n);
+    last = k;
+    pt = mix(pt, ifs_vertex(k, n), P[1]);
+    pt = vec3(ca*pt.x - sa*pt.z, pt.y, sa*pt.x + ca*pt.z);
+  }
+  vec3 byRad = pal(length(pt)*0.8, vec3(0.40,0.50,0.35), vec3(0.35,0.40,0.30),
+                   vec3(1.0,0.9,0.8), vec3(0.30,0.15,0.45));
+  vec3 byAdr = pal(last/n, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0,0.33,0.67));
+  col = mix(byRad, byAdr, P[4]);
+  return pt * 1.15;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/08-chladni.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "chladni",
+  name: "Chladni Figures",
+  roman: "VIII",
+  accent: "#e8d98a",
+  tex: "\\cos(n\\pi x)\\cos(m\\pi y)\\;\\pm\\;\\cos(m\\pi x)\\cos(n\\pi y)\\;=\\;0",
+  plain: "cos(n\u03c0x)cos(m\u03c0y) \u00b1 cos(m\u03c0x)cos(n\u03c0y) = 0",
+  caption: "Sand on a vibrating plate migrates to the curves that do not move \u2014 the nodal lines of a standing-wave eigenmode. Points here brighten exactly where the mode function vanishes, reproducing Chladni's figures of 1787; the RELIEF lever lets you watch the plate itself oscillate around its silent curves. Stepping n and m walks the eigenvalue ladder, and MIX interpolates between the two degenerate combinations.",
+  cam: { dist: 3.4, pitch: 0.70, tgtY: 0.0, rot: 0.03 },
+  gain: 1.2,
+  params: [
+    { label: "MODE N",    min: 1,   max: 12,  step: 1,    def: 5    },
+    { label: "MODE M",    min: 1,   max: 12,  step: 1,    def: 2    },
+    { label: "MIX \u00b1", min: -1,  max: 1,   step: 0.01, def: 1    },
+    { label: "SHARPNESS", min: 1,   max: 14,  step: 0.1,  def: 6    },
+    { label: "RELIEF",    min: 0,   max: 0.5, step: 0.005,def: 0.12 },
+    { label: "PLATE SIZE",min: 1.5, max: 4,   step: 0.01, def: 3.0  }
+  ],
+  glsl: `
+vec3 shape_chladni(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  vec2 xy = q - 0.5;
+  float f = cos(P[0]*PI*xy.x)*cos(P[1]*PI*xy.y)
+          + P[2]*cos(P[1]*PI*xy.x)*cos(P[0]*PI*xy.y);
+  float node = exp(-(f*f)*P[3]*P[3]);    /* sand collects where f = 0 */
+  float y = P[4]*f*cos(2.2*uT);          /* the plate actually vibrating */
+  vec3 p = vec3(xy.x*P[5], y, xy.y*P[5]);
+  vec3 sand = vec3(0.95, 0.90, 0.75);
+  vec3 wavec = mix(vec3(0.10, 0.35, 0.55), vec3(0.90, 0.55, 0.25), 0.5 + 0.5*f);
+  col = wavec*0.10 + sand*node*1.3;
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/09-gibbs.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "gibbs",
+  name: "The Gibbs Phenomenon",
+  roman: "IX",
+  accent: "#7fb4ff",
+  tex: "S_N(x)=\\sum_{k=1}^{N} b_k\\,\\sin kx,\\qquad \\lim_{N\\to\\infty}\\,\\max S_N \\;\\approx\\; 1.0895\\,\\cdot f(0^{+})",
+  plain: "S\u2099(x) = \u03a3 b\u2096 sin(kx);  overshoot \u2192 8.95% forever",
+  caption: "Truncate a Fourier series and it converges everywhere \u2014 except that near every jump it overshoots by the same stubborn 9%, no matter how many harmonics you add. Depth is the harmonic count N, so the whole surface is convergence itself; the hot ridges flanking each discontinuity are the Gibbs phenomenon refusing to die, only narrowing. The TYPE lever morphs the target from square wave to sawtooth.",
+  cam: { dist: 3.4, pitch: 0.35, tgtY: 0.0, rot: 0.03 },
+  gain: 1.1,
+  params: [
+    { label: "HARMONICS",  min: 1,   max: 64, step: 1,    def: 24  },
+    { label: "SQUARE\u2194SAW", min: 0, max: 1, step: 0.01, def: 0   },
+    { label: "PHASE SPEED",min: 0,   max: 2,  step: 0.01, def: 0.6 },
+    { label: "DEPTH AXIS", min: 0.5, max: 4,  step: 0.01, def: 2.6 },
+    { label: "AMPLITUDE",  min: 0.2, max: 1.6,step: 0.01, def: 0.9 }
+  ],
+  glsl: `
+vec3 shape_gibbs(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float x  = (q.x - 0.5)*TAU*1.05;
+  float nf = 1.0 + q.y*(P[0] - 1.0);     /* fractional harmonic count */
+  float ph = P[2]*uT;
+  float xi = mod(x - ph + PI, TAU) - PI; /* wrapped argument */
+  const float A = 0.75;
+  float s = 0.0;
+  for(int k = 1; k <= 64; k++){
+    float fk = float(k);
+    if(fk > nf + 1.0) break;
+    float w = clamp(nf - fk + 1.0, 0.0, 1.0);   /* fade last harmonic in */
+    float odd = (fract(fk*0.5) > 0.25) ? 1.0 : 0.0;
+    float sq  = odd * (4.0*A/PI) / fk;                    /* square wave  */
+    float sw  = (2.0*A/PI) * ((odd > 0.5) ? 1.0 : -1.0) / fk; /* sawtooth */
+    s += w * mix(sq, sw, P[1]) * sin(fk*xi);
+  }
+  /* the limit function, for measuring the overshoot */
+  float lim = mix(A*sign(sin(xi)), A*xi/PI, P[1]);
+  float dev = abs(s - lim);
+  float y = P[4]*0.65*s;
+  vec3 p = vec3(x*0.42, y, (q.y - 0.5)*P[3]*0.8);
+  col = mix(vec3(0.10, 0.26, 0.50), vec3(0.55, 0.75, 1.0), 0.5 + 0.55*s);
+  col = col*0.55 + vec3(1.0, 0.42, 0.12)*smoothstep(0.03, 0.28, dev)*1.5;
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/10-modular.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "modmul",
+  name: "Modular Multiplication",
+  roman: "X",
+  accent: "#f2a0ff",
+  tex: "j \\;\\longmapsto\\; m\\,j \\pmod{n},\\qquad \\text{chords envelope an epicycloid of } \\lfloor m\\rfloor - 1 \\text{ cusps}",
+  plain: "j \u21a6 m\u00b7j (mod n) \u2014 chords envelope an epicycloid",
+  caption: "Join every residue j on a circle to m\u00b7j mod n, and the chords envelope an epicycloid: a cardioid at m = 2, a nephroid at 3, and onward through the whole family. The multiplier slides continuously, so you can watch number theory deform through geometry in real time. The LIFT lever unrolls the circle into a helix, turning each chord into a strut of a modular bridge.",
+  cam: { dist: 3.2, pitch: 0.35, tgtY: 0.0, rot: 0.04 },
+  gain: 0.8,
+  params: [
+    { label: "MULTIPLIER m", min: 1,  max: 12,  step: 0.01, def: 2    },
+    { label: "MODULUS n",    min: 24, max: 720, step: 1,    def: 240  },
+    { label: "HELIX LIFT",   min: 0,  max: 1.2, step: 0.01, def: 0    },
+    { label: "m DRIFT",      min: 0,  max: 0.3, step: 0.005,def: 0.05 },
+    { label: "HUE: INDEX\u2194LENGTH", min: 0, max: 1, step: 0.01, def: 0.25 }
+  ],
+  glsl: `
+vec3 shape_modmul(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float n = P[1];
+  float m = mod(P[0] + P[3]*uT, n);      /* wrap: multiplier mod n is the same map */
+  float j = floor(q.y*n);
+  float t = q.x;                          /* position along the chord */
+  float f2 = fract(m*j/n);
+  float a1 = TAU*j/n;
+  float a2 = TAU*f2;
+  vec2 A = vec2(cos(a1), sin(a1));
+  vec2 B = vec2(cos(a2), sin(a2));
+  float y1 = P[2]*(j/n - 0.5)*2.0;
+  float y2 = P[2]*(f2  - 0.5)*2.0;
+  vec3 p = vec3(mix(A.x, B.x, t), mix(y1, y2, t), mix(A.y, B.y, t))*1.25;
+  float clen = length(B - A)*0.5;
+  vec3 byIdx = pal(j/n,       vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  vec3 byLen = pal(clen*0.9,  vec3(0.52,0.36,0.30), vec3(0.45,0.36,0.30),
+                   vec3(1.0,0.9,0.8), vec3(0.05,0.25,0.50));
+  col = mix(byIdx, byLen, P[4]) * (0.55 + 0.45*sin(PI*t));
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/11-zeta.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "zeta",
+  name: "The Critical Line",
+  roman: "XI",
+  accent: "#c8b8ff",
+  tex: "\\zeta\\!\\left(\\tfrac12+it\\right)=\\sum_{n=1}^{\\infty} n^{-1/2}\\,e^{-\\,it\\ln n}",
+  plain: "\u03b6(\u00bd+it) = \u03a3 n^{\u2212\u00bd} e^{\u2212it\u00b7ln n}",
+  caption: "Partial sums of the Riemann zeta function along the critical line, drawn as filaments: each strand is the walk 1 + 2\u207b\u02e2 + 3\u207b\u02e2 + \u22ef at one height t, spiraling toward its limit. Where a strand's end pinches onto the central axis, \u03b6(\u00bd+it) = 0 \u2014 the first zeros live at t \u2248 14.13, 21.02, 25.01. The Riemann Hypothesis is the claim that this line is the only place they ever occur. Slide HEIGHT to climb the line.",
+  cam: { dist: 3.6, pitch: 0.15, tgtY: 0.0, rot: 0.05 },
+  gain: 0.8,
+  params: [
+    { label: "HEIGHT t",  min: 2,   max: 120, step: 0.1,  def: 21   },
+    { label: "SPAN \u0394t", min: 5, max: 80,  step: 0.5,  def: 30   },
+    { label: "TERMS",     min: 8,   max: 64,  step: 1,    def: 48   },
+    { label: "SCALE",     min: 0.2, max: 1.2, step: 0.01, def: 0.55 },
+    { label: "COLUMN",    min: 1,   max: 4,   step: 0.05, def: 2.4  }
+  ],
+  glsl: `
+vec3 shape_zeta(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float t  = P[0] + (q.y - 0.5)*P[1];    /* height on the critical line */
+  float kf = 1.0 + q.x*(P[2] - 1.0);     /* how many terms of the walk  */
+  vec2 S = vec2(0.0);
+  for(int nn = 1; nn <= 64; nn++){
+    float fn = float(nn);
+    if(fn > kf + 1.0) break;
+    float w = clamp(kf - fn + 1.0, 0.0, 1.0);
+    float amp = inversesqrt(fn);
+    float ang = t*log(fn);
+    S += w*amp*vec2(cos(ang), -sin(ang));
+  }
+  vec3 p = vec3((S.x - 1.2)*P[3], (q.y - 0.5)*P[4], S.y*P[3]);
+  col = pal(q.x*0.7, vec3(0.42, 0.40, 0.55), vec3(0.40, 0.38, 0.42),
+            vec3(1.0, 0.95, 0.85), vec3(0.62, 0.45, 0.20));
+  col *= 0.35 + 1.25*pow(q.x, 3.0);      /* the walk's endpoint glows */
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/12-qjulia.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "qjulia",
+  name: "A Quaternion Julia Set",
+  roman: "XII",
+  accent: "#ff8f7a",
+  tex: "q_{n+1}=q_n^{2}+c,\\qquad q,\\,c\\in\\mathbb{H},\\qquad J_c=\\partial\\{q_0: |q_n|\\ \\text{bounded}\\}",
+  plain: "q\u2099\u208a\u2081 = q\u2099\u00b2 + c,   q, c \u2208 \u210d (quaternions)",
+  caption: "The Julia set of z\u00b2 + c, computed in the quaternions and sliced back into three dimensions. Every point is a random sample of the slice: orbits that escape at once are discarded, late escapers trace the luminous boundary shell, and prisoners fill the dim interior. Steer the four components of c to deform the set continuously \u2014 most of parameter space is dust, and the interesting sets live near its shore.",
+  cam: { dist: 3.4, pitch: 0.25, tgtY: 0.0, rot: 0.06 },
+  gain: 0.55,
+  params: [
+    { label: "C \u00b7 1",  min: -1, max: 1, step: 0.005, def: -0.20 },
+    { label: "C \u00b7 i",  min: -1, max: 1, step: 0.005, def:  0.60 },
+    { label: "C \u00b7 j",  min: -1, max: 1, step: 0.005, def:  0.20 },
+    { label: "C \u00b7 k",  min: -1, max: 1, step: 0.005, def:  0.20 },
+    { label: "SLICE w",    min: -1, max: 1, step: 0.005, def:  0.0  },
+    { label: "ITERATIONS", min: 6,  max: 16,step: 1,     def:  11   },
+    { label: "SHELL CUT",  min: 0,  max: 0.9, step: 0.01,def:  0.45 }
+  ],
+  glsl: `
+vec3 shape_qjulia(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  /* uniform random sample of a ball in the 3D slice */
+  float ct = 1.0 - 2.0*q.x;
+  float st = sqrt(max(0.0, 1.0 - ct*ct));
+  float ph = TAU*q.y;
+  float rad = 1.35*pow(rnd.x, 0.33333);
+  vec3 xyz = vec3(st*cos(ph), ct, st*sin(ph))*rad;
+  /* quaternion (a; b,c,d): a = zq.x scalar part */
+  vec4 zq = vec4(xyz, P[4]);
+  vec4 cc = vec4(P[0], P[1], P[2], P[3]);
+  float K = P[5];
+  float esc = -1.0;
+  for(int j = 0; j < 16; j++){
+    if(float(j) >= K) break;
+    zq = vec4(zq.x*zq.x - dot(zq.yzw, zq.yzw), 2.0*zq.x*zq.yzw) + cc;
+    if(dot(zq, zq) > 16.0){ esc = float(j); break; }
+  }
+  if(esc >= 0.0 && esc < P[6]*K){
+    /* escaped fast: far outside the set — discard off-frustum */
+    col = vec3(0.0);
+    return vec3(0.0, -999.0, 0.0);
+  }
+  float glow = (esc < 0.0) ? 0.35 : 1.5;           /* interior dim, shell bright */
+  float hue  = (esc < 0.0) ? rad*0.45 : esc/K;
+  col = pal(hue*0.6 + 0.12,
+            vec3(0.42, 0.30, 0.50), vec3(0.45, 0.35, 0.40),
+            vec3(1.0, 0.90, 0.70), vec3(0.78, 0.52, 0.18)) * glow;
+  return xyz * 0.95;
+}`
+});
+
+</script>
+
+<!-- core: engine -->
+<script>
+/* ── js/core/camera.js ── */
+"use strict";
+Atlas.Camera = (function () {
+  const st = { yaw: 0.6, pitch: 0.32, dist: 3.5, tgtY: 0, vyaw: 0, vpitch: 0 };
+  const pointers = new Map();
+  let pinchD = 0;
+  let dragging = false;
+
+  function perspective(fovy, aspect, near, far) {
+    const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+    return new Float32Array([
+      f / aspect, 0, 0, 0,   0, f, 0, 0,
+      0, 0, (far + near) * nf, -1,   0, 0, 2 * far * near * nf, 0
+    ]);
+  }
+  function lookAt(eye, tgt, up) {
+    const zx = eye[0]-tgt[0], zy = eye[1]-tgt[1], zz = eye[2]-tgt[2];
+    const zl = Math.hypot(zx, zy, zz) || 1;
+    const z = [zx/zl, zy/zl, zz/zl];
+    const x = [up[1]*z[2]-up[2]*z[1], up[2]*z[0]-up[0]*z[2], up[0]*z[1]-up[1]*z[0]];
+    const xl = Math.hypot(x[0], x[1], x[2]) || 1;
+    x[0]/=xl; x[1]/=xl; x[2]/=xl;
+    const y = [z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]];
+    return new Float32Array([
+      x[0], y[0], z[0], 0,
+      x[1], y[1], z[1], 0,
+      x[2], y[2], z[2], 0,
+      -(x[0]*eye[0]+x[1]*eye[1]+x[2]*eye[2]),
+      -(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),
+      -(z[0]*eye[0]+z[1]*eye[1]+z[2]*eye[2]), 1
+    ]);
+  }
+  function mul4(a, b) {
+    const o = new Float32Array(16);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++)
+      o[c*4+r] = a[r]*b[c*4] + a[4+r]*b[c*4+1] + a[8+r]*b[c*4+2] + a[12+r]*b[c*4+3];
+    return o;
+  }
+
+  function clampPitch(p) { return Math.min(1.45, Math.max(-1.45, p)); }
+
+  return {
+    state: st,
+    dragging: () => dragging,
+
+    attach(canvas) {
+      canvas.addEventListener("pointerdown", e => {
+        canvas.setPointerCapture(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        dragging = true;
+        canvas.classList.add("dragging");
+        if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          pinchD = Math.hypot(a.x - b.x, a.y - b.y);
+        }
+      });
+      canvas.addEventListener("pointermove", e => {
+        if (!pointers.has(e.pointerId)) return;
+        const prev = pointers.get(e.pointerId);
+        const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 1) {
+          st.vyaw = -dx * 0.005;
+          st.vpitch = dy * 0.005;
+          st.yaw += st.vyaw;
+          st.pitch = clampPitch(st.pitch + st.vpitch);
+        } else if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          const d = Math.hypot(a.x - b.x, a.y - b.y);
+          if (pinchD > 0) st.dist = Math.min(9, Math.max(1.1, st.dist * pinchD / d));
+          pinchD = d;
+        }
+      });
+      const end = e => {
+        pointers.delete(e.pointerId);
+        if (pointers.size === 0) { dragging = false; canvas.classList.remove("dragging"); }
+      };
+      canvas.addEventListener("pointerup", end);
+      canvas.addEventListener("pointercancel", end);
+      canvas.addEventListener("wheel", e => {
+        e.preventDefault();
+        st.dist = Math.min(9, Math.max(1.1, st.dist * Math.exp(e.deltaY * 0.0011)));
+      }, { passive: false });
+    },
+
+    home(cam) { st.dist = cam.dist; st.pitch = cam.pitch; st.tgtY = cam.tgtY; st.yaw = 0.6; },
+
+    /* dt, plate camera home, whether a transition is running, spin multiplier */
+    update(dt, home, transitioning, spinMul, reduceMotion) {
+      if (!dragging) {
+        st.yaw += (reduceMotion ? 0 : home.rot * spinMul) * dt;
+        st.vyaw *= 0.92; st.vpitch *= 0.92;
+        st.yaw += st.vyaw;
+        st.pitch = clampPitch(st.pitch + st.vpitch);
+      }
+      if (transitioning) {
+        const k = Math.min(1, dt * 2.0);
+        st.dist  += (home.dist  - st.dist)  * k;
+        st.pitch += (home.pitch - st.pitch) * k * 0.6;
+        st.tgtY  += (home.tgtY  - st.tgtY)  * k;
+      }
+    },
+
+    matrix(aspect, fovRad) {
+      const eye = [
+        st.dist * Math.cos(st.pitch) * Math.sin(st.yaw),
+        st.tgtY + st.dist * Math.sin(st.pitch),
+        st.dist * Math.cos(st.pitch) * Math.cos(st.yaw)
+      ];
+      return mul4(perspective(fovRad, aspect, 0.05, 60),
+                  lookAt(eye, [0, st.tgtY, 0], [0, 1, 0]));
+    }
+  };
+})();
+
+</script>
+<script>
+/* ── js/core/renderer.js ── */
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════
+   RENDERER
+   Pass 1  fade   : previous accumulation × persistence  (trails)
+   Pass 2  points : N procedural points, additive blend into RGBA16F
+   Pass 3  tonemap: 1 − exp(−x·E), hue rotate, saturation, gamma,
+                    vignette, dither → screen
+   Brightness therefore remains a density estimate of the measure;
+   persistence just extends the estimate through time.
+   ═══════════════════════════════════════════════════════════════════ */
+Atlas.Renderer = (function () {
+  let gl, canvas, hasFloat = false;
+  let progPts, progTm, progFade;
+  let U = {}, Utm = {}, Ufade = {};
+  let vao;
+  let accum = [null, null], accumTex = [null, null], cur = 0;
+  let fbW = 0, fbH = 0;
+  let renderScale = 1;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+      throw new Error(gl.getShaderInfoLog(s) + "\n--- in ---\n" + src.slice(0, 400));
+    return s;
+  }
+  function program(vs, fs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+      throw new Error(gl.getProgramInfoLog(p));
+    return p;
+  }
+
+  function makeTargets(w, h) {
+    for (let i = 0; i < 2; i++) {
+      if (accum[i]) { gl.deleteFramebuffer(accum[i]); gl.deleteTexture(accumTex[i]); }
+      accumTex[i] = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, accumTex[i]);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, hasFloat ? gl.RGBA16F : gl.RGBA8, w, h);
+      accum[i] = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, accum[i]);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+                              gl.TEXTURE_2D, accumTex[i], 0);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    fbW = w; fbH = h;
+  }
+
+  function ensureSize() {
+    const w = Math.max(2, Math.round(canvas.clientWidth * renderScale));
+    const h = Math.max(2, Math.round(canvas.clientHeight * renderScale));
+    if (w !== canvas.width || h !== canvas.height) {
+      canvas.width = w; canvas.height = h;
+      makeTargets(w, h);
+    }
+  }
+
+  function hueMatrix(deg) {
+    const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    /* YIQ hue rotation, row-major (uploaded with transpose=true) */
+    return new Float32Array([
+      0.299 + 0.701 * c + 0.168 * s, 0.587 - 0.587 * c + 0.330 * s, 0.114 - 0.114 * c - 0.497 * s,
+      0.299 - 0.299 * c - 0.328 * s, 0.587 + 0.413 * c + 0.035 * s, 0.114 - 0.114 * c + 0.292 * s,
+      0.299 - 0.300 * c + 1.250 * s, 0.587 - 0.588 * c - 1.050 * s, 0.114 + 0.886 * c - 0.203 * s
+    ]);
+  }
+
+  return {
+    init(canvasEl, onLost) {
+      canvas = canvasEl;
+      gl = canvas.getContext("webgl2", {
+        antialias: false, alpha: false, depth: false, stencil: false,
+        powerPreference: "high-performance",
+        preserveDrawingBuffer: true            /* enables PNG export */
+      });
+      if (!gl) return false;
+      hasFloat = !!gl.getExtension("EXT_color_buffer_float");
+      renderScale = Math.min(window.devicePixelRatio || 1, 1.5);
+
+      progPts  = program(Atlas.buildVertexShader(), Atlas.GLSL.pointFrag);
+      progTm   = program(Atlas.GLSL.quadVert, Atlas.GLSL.tonemapFrag);
+      progFade = program(Atlas.GLSL.quadVert, Atlas.GLSL.fadeFrag);
+
+      for (const n of ["uVP","uT","uMorph","uModeA","uModeB","uPt",
+                       "uIntensity","uGainA","uGainB"])
+        U[n] = gl.getUniformLocation(progPts, n);
+      U.uPA = gl.getUniformLocation(progPts, "uPA[0]");
+      U.uPB = gl.getUniformLocation(progPts, "uPB[0]");
+      for (const n of ["uTex","uExp","uGamma","uSat","uHueM"])
+        Utm[n] = gl.getUniformLocation(progTm, n);
+      Ufade.uTex = gl.getUniformLocation(progFade, "uTex");
+      Ufade.uPersist = gl.getUniformLocation(progFade, "uPersist");
+
+      vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.disable(gl.DEPTH_TEST);
+
+      canvas.addEventListener("webglcontextlost", e => {
+        e.preventDefault();
+        if (onLost) onLost();
+      });
+      ensureSize();
+      window.addEventListener("resize", ensureSize);
+      return true;
+    },
+
+    gl() { return gl; },
+    hasFloat() { return hasFloat; },
+    size() { ensureSize(); return { w: canvas.width, h: canvas.height }; },
+
+    gpuName() {
+      try {
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        let s = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : "";
+        const m = /\(([^,)]*),?\s*([^,)]*)/.exec(s);
+        if (m && m[2]) s = m[2].trim();
+        s = s.replace(/\s*\(0x[0-9A-Fa-f]+\)/g, "").replace(/Direct3D.*$/i, "").trim();
+        return (s || "GPU").toUpperCase().slice(0, 40);
+      } catch (e) { return "GPU"; }
+    },
+
+    /* opts: vp, simT, morph, modeA, modeB, N, ptSize, intensity,
+             gainA, gainB, PA, PB, persist, exposure, gamma, hue, sat */
+    render(o) {
+      ensureSize();
+      const W = canvas.width, H = canvas.height;
+      cur ^= 1;
+      const prev = 1 - cur;
+
+      /* pass 1 — decayed history, or a clear */
+      gl.bindFramebuffer(gl.FRAMEBUFFER, accum[cur]);
+      gl.viewport(0, 0, fbW, fbH);
+      gl.disable(gl.BLEND);
+      if (o.persist > 0.001) {
+        gl.useProgram(progFade);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, accumTex[prev]);
+        gl.uniform1i(Ufade.uTex, 0);
+        gl.uniform1f(Ufade.uPersist, o.persist);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      } else {
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      }
+
+      /* pass 2 — the measure */
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.useProgram(progPts);
+      gl.bindVertexArray(vao);
+      gl.uniformMatrix4fv(U.uVP, false, o.vp);
+      gl.uniform1f(U.uT, o.simT);
+      gl.uniform1f(U.uMorph, o.morph);
+      gl.uniform1i(U.uModeA, o.modeA);
+      gl.uniform1i(U.uModeB, o.modeB);
+      gl.uniform1f(U.uPt, o.ptSize);
+      gl.uniform1f(U.uIntensity, o.intensity);
+      gl.uniform1f(U.uGainA, o.gainA);
+      gl.uniform1f(U.uGainB, o.gainB);
+      gl.uniform1fv(U.uPA, o.PA);
+      gl.uniform1fv(U.uPB, o.PB);
+      gl.drawArrays(gl.POINTS, 0, o.N);
+
+      /* pass 3 — tonemap + grade to screen */
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, W, H);
+      gl.disable(gl.BLEND);
+      gl.useProgram(progTm);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, accumTex[cur]);
+      gl.uniform1i(Utm.uTex, 0);
+      gl.uniform1f(Utm.uExp, o.exposure);
+      gl.uniform1f(Utm.uGamma, o.gamma);
+      gl.uniform1f(Utm.uSat, o.sat);
+      gl.uniformMatrix3fv(Utm.uHueM, true, hueMatrix(o.hue));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    },
+
+    exportPNG(name) {
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      }, "image/png");
+    }
+  };
+})();
+
+</script>
+<script>
+/* ── js/core/ui.js ── */
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════
+   UI — the placard, the lever racks, telemetry, keyboard.
+   Plate levers are generated from each plate's params[] declaration;
+   values live in Atlas.values[plateIndex] (Float32Array(8)) and are
+   read by the render loop every frame.
+   ═══════════════════════════════════════════════════════════════════ */
+Atlas.UI = (function () {
+  const $ = id => document.getElementById(id);
+  let hooks = {};      /* { setMode(i), togglePause(), exportPNG() } */
+  let reduceMotion = false;
+
+  /* per-plate lever values */
+  function initValues() {
+    Atlas.values = Atlas.plates.map(p => {
+      const a = new Float32Array(8);
+      p.params.forEach((prm, k) => a[k] = prm.def);
+      return a;
+    });
+  }
+
+  function fmtVal(v, step) {
+    return step >= 1 ? String(Math.round(v)) : (+v).toFixed(2);
+  }
+  function fmtInt(n) { return n.toLocaleString("en-US"); }
+
+  /* ————— plate lever rack ————— */
+  function buildPlatePanel(i) {
+    const p = Atlas.plates[i];
+    const box = $("plateParams");
+    box.innerHTML = "";
+    p.params.forEach((prm, k) => {
+      const label = document.createElement("label");
+      label.className = "ctl";
+      const lbl = document.createElement("span");
+      lbl.className = "lbl";
+      const em = document.createElement("em");
+      em.textContent = fmtVal(Atlas.values[i][k], prm.step);
+      lbl.append(prm.label, em);
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = prm.min; input.max = prm.max; input.step = prm.step;
+      input.value = Atlas.values[i][k];
+      input.addEventListener("input", () => {
+        Atlas.values[i][k] = +input.value;
+        em.textContent = fmtVal(+input.value, prm.step);
+      });
+      label.append(lbl, input);
+      box.appendChild(label);
+    });
+  }
+  function snap(v, prm) {
+    const s = Math.round((v - prm.min) / prm.step) * prm.step + prm.min;
+    return Math.min(prm.max, Math.max(prm.min, s));
+  }
+  function randomizePlate(i) {
+    const p = Atlas.plates[i];
+    p.params.forEach((prm, k) => {
+      Atlas.values[i][k] = snap(prm.min + Math.random() * (prm.max - prm.min), prm);
+    });
+    buildPlatePanel(i);
+  }
+  function resetPlate(i) {
+    const p = Atlas.plates[i];
+    p.params.forEach((prm, k) => { Atlas.values[i][k] = prm.def; });
+    buildPlatePanel(i);
+  }
+
+  /* ————— placard text ————— */
+  function renderFormula(m) {
+    const el = $("formula");
+    if (window.katex) {
+      try {
+        katex.render(m.tex, el, { throwOnError: false, displayMode: false });
+        return;
+      } catch (e) { /* fall through */ }
+    }
+    el.textContent = m.plain;
+  }
+  function applyPlateText(i) {
+    const m = Atlas.plates[i];
+    $("title").textContent = m.name;
+    $("plateRoman").textContent = "PLATE " + m.roman;
+    $("plateOf").textContent = "/ " + Atlas.plates[Atlas.plates.length - 1].roman;
+    $("caption").textContent = m.caption;
+    renderFormula(m);
+    document.documentElement.style.setProperty("--accent", m.accent);
+    [...$("dots").children].forEach((d, k) => d.classList.toggle("on", k === i));
+    buildPlatePanel(i);
+  }
+  function swapPlateText(i) {
+    const els = [$("title"), $("formula"), $("caption")];
+    els.forEach(e => e.classList.add("swap-out"));
+    setTimeout(() => {
+      applyPlateText(i);
+      els.forEach(e => e.classList.remove("swap-out"));
+    }, reduceMotion ? 0 : 450);
+  }
+
+  /* ————— global render rack ————— */
+  function buildGlobalPanel(S) {
+    const defs = [
+      { key: "densExp", label: "DENSITY", min: 20, max: 27, step: 1, def: 23,
+        fmt: v => "2^" + v,
+        set: v => { S.N = 1 << v; $("densWarn").classList.toggle("show", v >= 26); } },
+      { key: "ptSize",  label: "POINT SIZE", min: 0.5, max: 4,   step: 0.05, def: 1.15,
+        set: v => S.ptSize = v },
+      { key: "expoLog", label: "EXPOSURE",   min: -1,  max: 1.3, step: 0.01, def: 0,
+        fmt: v => "\u00d7" + Math.pow(10, v).toFixed(2),
+        set: v => S.exposure = Math.pow(10, v) },
+      { key: "gamma",   label: "GAMMA",      min: 0.5, max: 1.6, step: 0.01, def: 0.82,
+        set: v => S.gamma = v },
+      { key: "hue",     label: "HUE SHIFT",  min: 0,   max: 360, step: 1,    def: 0,
+        fmt: v => v + "\u00b0", set: v => S.hue = v },
+      { key: "sat",     label: "SATURATION", min: 0,   max: 2,   step: 0.01, def: 1,
+        set: v => S.sat = v },
+      { key: "persist", label: "TRAILS",     min: 0,   max: 0.97,step: 0.01, def: 0,
+        set: v => S.persist = v },
+      { key: "flow",    label: "FLOW",       min: 0,   max: 2.5, step: 0.01, def: 1,
+        set: v => S.flow = v },
+      { key: "fov",     label: "LENS FOV",   min: 35,  max: 110, step: 1,    def: 52,
+        fmt: v => v + "\u00b0", set: v => S.fovDeg = v },
+      { key: "spin",    label: "AUTO SPIN",  min: -2,  max: 2,   step: 0.01, def: 1,
+        set: v => S.spinMul = v }
+    ];
+    const box = $("globalParams");
+    defs.forEach(d => {
+      const label = document.createElement("label");
+      label.className = "ctl";
+      const lbl = document.createElement("span");
+      lbl.className = "lbl";
+      const em = document.createElement("em");
+      const show = v => {
+        if (d.key === "densExp") em.innerHTML = "2<sup>" + v + "</sup> \u00b7 " + fmtInt(1 << v);
+        else em.textContent = d.fmt ? d.fmt(+v) : fmtVal(+v, d.step);
+      };
+      lbl.append(d.label, em);
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = d.min; input.max = d.max; input.step = d.step; input.value = d.def;
+      input.addEventListener("input", () => { d.set(+input.value); show(+input.value); });
+      d.set(d.def); show(d.def);
+      label.append(lbl, input);
+      box.appendChild(label);
+    });
+  }
+
+  /* ————— telemetry ————— */
+  function sci(n) {
+    if (!isFinite(n) || n <= 0) return "\u2013";
+    const e = Math.floor(Math.log10(n));
+    const m = (n / Math.pow(10, e)).toFixed(1);
+    const sup = String(e).split("").map(c => "\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079"[+c] || c).join("");
+    return m + "\u00d710" + sup;
+  }
+
+  return {
+    reduceMotion: () => reduceMotion,
+
+    init(S, h) {
+      hooks = h;
+      reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      initValues();
+
+      /* plate dots */
+      Atlas.plates.forEach((m, i) => {
+        const b = document.createElement("button");
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-label", "Plate " + m.roman + " \u2014 " + m.name);
+        b.addEventListener("click", () => hooks.setMode(i));
+        $("dots").appendChild(b);
+      });
+      $("prev").addEventListener("click", () => hooks.setMode(S.modeB - 1));
+      $("next").addEventListener("click", () => hooks.setMode(S.modeB + 1));
+      $("rand").addEventListener("click", () => randomizePlate(S.modeB));
+      $("resetP").addEventListener("click", () => resetPlate(S.modeB));
+      $("pause").addEventListener("click", () => hooks.togglePause());
+      $("shot").addEventListener("click", () => hooks.exportPNG());
+
+      buildGlobalPanel(S);
+      applyPlateText(0);
+
+      /* collapse racks by default on small screens */
+      if (window.matchMedia("(max-width: 860px)").matches) {
+        $("panelPlate").removeAttribute("open");
+        $("panelRender").removeAttribute("open");
+      }
+
+      window.addEventListener("keydown", e => {
+        const a = document.activeElement;
+        if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) return;
+        if (e.key === "ArrowRight") hooks.setMode(S.modeB + 1);
+        else if (e.key === "ArrowLeft") hooks.setMode(S.modeB - 1);
+        else if (e.key === " ") { e.preventDefault(); hooks.togglePause(); }
+        else if (e.key === "h" || e.key === "H") document.body.classList.toggle("ui-hidden");
+        else if (e.key === "r" || e.key === "R") randomizePlate(S.modeB);
+        else if (e.key === "s" || e.key === "S") hooks.exportPNG();
+      });
+    },
+
+    swapPlateText,
+    setPauseLabel(paused) {
+      $("pause").innerHTML = paused ? "RESUME &nbsp;\u25b6" : "PAUSE &nbsp;\u258e\u258e";
+    },
+    setGpuLine(t) { $("gpuLine").textContent = t; },
+    setStats(fps, pps) {
+      $("fps").textContent = fps.toFixed(0);
+      $("pps").textContent = sci(pps);
+    },
+    showLost() { $("lost").classList.add("show"); }
+  };
+})();
+
+</script>
+<script>
+/* ── js/core/main.js ── */
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN — owns the state machine and the frame loop.
+   ═══════════════════════════════════════════════════════════════════ */
+(function () {
+  const canvas = document.getElementById("gl");
+  const MODES = Atlas.plates;
+  const MORPH_SECS = 1.7;
+
+  const S = Atlas.state = {
+    N: 1 << 23, ptSize: 1.15, exposure: 1, gamma: 0.82, hue: 0, sat: 1,
+    persist: 0, flow: 1, fovDeg: 52, spinMul: 1,
+    paused: false, modeA: 0, modeB: 0, morph: 1, simT: 0
+  };
+
+  function setMode(i) {
+    const n = MODES.length;
+    i = ((i % n) + n) % n;
+    if (i === S.modeB) return;
+    S.modeA = S.modeB;                       /* if mid-flight, snap forward */
+    S.modeB = i;
+    S.morph = 0;
+    Atlas.UI.swapPlateText(i);
+  }
+  function togglePause() {
+    S.paused = !S.paused;
+    Atlas.UI.setPauseLabel(S.paused);
+  }
+  function exportPNG() {
+    const roman = MODES[S.modeB].roman.toLowerCase();
+    Atlas.Renderer.exportPNG("atlas-plate-" + roman + ".png");
+  }
+
+  if (!Atlas.Renderer.init(canvas, () => Atlas.UI.showLost())) {
+    document.getElementById("lost").classList.add("show");
+    return;
+  }
+  Atlas.UI.init(S, { setMode, togglePause, exportPNG });
+  Atlas.UI.setGpuLine(Atlas.Renderer.gpuName() +
+    (Atlas.Renderer.hasFloat() ? " \u00b7 RGBA16F" : " \u00b7 RGBA8"));
+  Atlas.Camera.attach(canvas);
+  Atlas.Camera.home(MODES[0].cam);
+  canvas.addEventListener("dblclick", () => Atlas.Camera.home(MODES[S.modeB].cam));
+
+  let last = performance.now();
+  let fpsAcc = 0, fpsN = 0, fpsClock = 0;
+
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+
+    if (!S.paused) S.simT += dt * S.flow;
+    if (S.morph < 1) {
+      S.morph = Math.min(1, S.morph + dt / MORPH_SECS);
+      if (S.morph >= 1) S.modeA = S.modeB;
+    }
+
+    const home = MODES[S.modeB].cam;
+    Atlas.Camera.update(dt, home, S.morph < 1, S.spinMul, Atlas.UI.reduceMotion());
+
+    const { w, h } = Atlas.Renderer.size();
+    const vp = Atlas.Camera.matrix(w / h, S.fovDeg * Math.PI / 180);
+
+    /* brightness ∝ intensity·N/pixels stays constant as levers move;
+       trails multiply steady-state energy by 1/(1−persist), so scale down */
+    const base = Math.min(0.5, S.exposure * 0.35 * (w * h) / S.N);
+    const intensity = base * (1 - S.persist * 0.92);
+
+    Atlas.Renderer.render({
+      vp, simT: S.simT,
+      morph: S.morph >= 1 ? 0 : S.morph,
+      modeA: S.modeA, modeB: S.modeB,
+      N: S.N, ptSize: S.ptSize * Math.min(window.devicePixelRatio || 1, 1.5),
+      intensity,
+      gainA: MODES[S.modeA].gain, gainB: MODES[S.modeB].gain,
+      PA: Atlas.values[S.modeA], PB: Atlas.values[S.modeB],
+      persist: S.persist,
+      exposure: 1.0,          /* exposure already folded into intensity */
+      gamma: S.gamma, hue: S.hue, sat: S.sat
+    });
+
+    fpsAcc += dt; fpsN++; fpsClock += dt;
+    if (fpsClock > 0.5) {
+      const fps = fpsN / fpsAcc;
+      Atlas.UI.setStats(fps, S.N * fps);
+      fpsAcc = 0; fpsN = 0; fpsClock = 0;
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+</script>
+
+</body>
+</html>

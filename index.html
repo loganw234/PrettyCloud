@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Atlas of Mathematical Forms</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@1,400;1,500&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+
+<link rel="stylesheet" href="css/atlas.css">
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div id="frame"><i></i><i></i><i></i><i></i></div>
+
+<header id="masthead">
+  <div id="eyebrow">ATLAS OF MATHEMATICAL FORMS &nbsp;·&nbsp; <b>POINT-DENSITY EDITION</b></div>
+  <h1 id="title">The Hopf Fibration</h1>
+</header>
+
+<div id="telemetry">
+  <div id="gpuLine">GPU</div>
+  <div><b id="fps">–</b> FPS &nbsp;·&nbsp; <b id="pps">–</b> PTS/S</div>
+  <div class="dim">BRIGHTNESS = POINT DENSITY ≈ MEASURE</div>
+</div>
+
+<section id="placard">
+  <div id="plateNo"><b id="plateRoman">PLATE I</b> <span id="plateOf">/ XII</span></div>
+  <div id="formula"></div>
+  <hr>
+  <p id="caption"></p>
+</section>
+
+<aside id="console">
+  <div class="nav">
+    <button class="arrow" id="prev" aria-label="Previous plate">‹</button>
+    <div id="dots" role="tablist"></div>
+    <button class="arrow" id="next" aria-label="Next plate">›</button>
+  </div>
+
+  <details id="panelPlate" open>
+    <summary>PLATE PARAMETERS</summary>
+    <div>
+      <div id="plateParams"></div>
+      <div class="btns"><button id="rand">RANDOMIZE</button><button id="resetP">RESET</button></div>
+    </div>
+  </details>
+
+  <details id="panelRender" open>
+    <summary>RENDER</summary>
+    <div>
+      <div id="globalParams"></div>
+      <div id="densWarn">HEAVY DENSITY — EXPECT LOW FPS ON MODEST GPUS</div>
+      <div class="btns"><button id="pause">PAUSE ▎▎</button><button id="shot">EXPORT PNG</button></div>
+    </div>
+  </details>
+</aside>
+
+<div id="hint">DRAG · SCROLL · ← → PLATES · SPACE PAUSE · R RANDOMIZE · S EXPORT · H HIDE</div>
+
+<div id="lost">
+  <div><b>SIGNAL LOST</b><br>THE GPU CONTEXT WAS INTERRUPTED — LOWER THE DENSITY AND RELOAD.</div>
+</div>
+
+<!-- core: namespace + shared GLSL -->
+<script src="js/core/registry.js"></script>
+<script src="js/core/glsl-lib.js"></script>
+
+<!-- plates: one file each; add yours here -->
+<script src="js/plates/01-hopf.js"></script>
+<script src="js/plates/02-harmonics.js"></script>
+<script src="js/plates/03-logz.js"></script>
+<script src="js/plates/04-dejong.js"></script>
+<script src="js/plates/05-waves.js"></script>
+<script src="js/plates/06-mandelbrot.js"></script>
+<script src="js/plates/07-chaosgame.js"></script>
+<script src="js/plates/08-chladni.js"></script>
+<script src="js/plates/09-gibbs.js"></script>
+<script src="js/plates/10-modular.js"></script>
+<script src="js/plates/11-zeta.js"></script>
+<script src="js/plates/12-qjulia.js"></script>
+
+<!-- core: engine -->
+<script src="js/core/camera.js"></script>
+<script src="js/core/renderer.js"></script>
+<script src="js/core/ui.js"></script>
+<script src="js/core/main.js"></script>
+
+</body>
+</html>
