@@ -38,6 +38,18 @@ uint hashu(uint x){
   x ^= x >> 16; return x;
 }
 float u2f(uint x){ return float(x) * 2.3283064365386963e-10; }
+
+/* complex arithmetic on vec2 = a + bi — shared by the escape-time,
+   inverse-iteration, Möbius and domain-coloring plates */
+vec2 cmul(vec2 a, vec2 b){ return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
+vec2 cdiv(vec2 a, vec2 b){ float d = dot(b,b) + 1e-30; return vec2(a.x*b.x + a.y*b.y, a.y*b.x - a.x*b.y)/d; }
+vec2 cinv(vec2 a){ return vec2(a.x, -a.y)/(dot(a,a) + 1e-30); }
+vec2 csqrt(vec2 z){
+  float r = length(z);
+  float re = sqrt(max(0.0, 0.5*(r + z.x)));
+  float im = sqrt(max(0.0, 0.5*(r - z.x))) * (z.y < 0.0 ? -1.0 : 1.0);
+  return vec2(re, im);
+}
 `;
 
 Atlas.GLSL.vertMain = `

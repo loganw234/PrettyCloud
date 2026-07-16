@@ -367,6 +367,18 @@ uint hashu(uint x){
   x ^= x >> 16; return x;
 }
 float u2f(uint x){ return float(x) * 2.3283064365386963e-10; }
+
+/* complex arithmetic on vec2 = a + bi — shared by the escape-time,
+   inverse-iteration, Möbius and domain-coloring plates */
+vec2 cmul(vec2 a, vec2 b){ return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
+vec2 cdiv(vec2 a, vec2 b){ float d = dot(b,b) + 1e-30; return vec2(a.x*b.x + a.y*b.y, a.y*b.x - a.x*b.y)/d; }
+vec2 cinv(vec2 a){ return vec2(a.x, -a.y)/(dot(a,a) + 1e-30); }
+vec2 csqrt(vec2 z){
+  float r = length(z);
+  float re = sqrt(max(0.0, 0.5*(r + z.x)));
+  float im = sqrt(max(0.0, 0.5*(r - z.x))) * (z.y < 0.0 ? -1.0 : 1.0);
+  return vec2(re, im);
+}
 `;
 
 Atlas.GLSL.vertMain = `
@@ -1005,6 +1017,1191 @@ vec3 shape_qjulia(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
             vec3(0.42, 0.30, 0.50), vec3(0.45, 0.35, 0.40),
             vec3(1.0, 0.90, 0.70), vec3(0.78, 0.52, 0.18)) * glow;
   return xyz * 0.95;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/13-buddha.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "buddha",
+  name: "The Buddhabrot",
+  roman: "XIII",
+  accent: "#ffcf8f",
+  tex: "\\rho(w)\\;\\propto\\!\\!\\sum_{c:\\,\\text{escapes}}\\;\\#\\{n:\\,z_n(c)=w\\},\\qquad z_{n+1}=z_n^2+c",
+  plain: "ρ(w) ∝ # of escaping orbits zₙ₊₁ = zₙ² + c that visit w",
+  caption: "Not the Mandelbrot set but its ghost. Take every point c whose orbit escapes, and record where those orbits wandered before they left. Each point here is one uniformly-chosen stop along one escaping trajectory — reservoir-sampled in a single pass — so brightness is exactly the density of visitation, the measure the escaping dynamics leave behind. The prisoners (the set itself) are invisible; only the paths of the free show. MIN ESCAPE hollows out the quick escapers to reveal the deep filaments.",
+  cam: { dist: 3.2, pitch: 0.62, tgtY: 0.0, rot: 0.02 },
+  gain: 0.7,
+  params: [
+    { label: "ITERATIONS",   min: 20, max: 400, step: 1,    def: 200 },
+    { label: "MIN ESCAPE",   min: 0,  max: 80,  step: 1,    def: 3   },
+    { label: "SCALE",        min: 0.3,max: 1.4, step: 0.01, def: 0.72 },
+    { label: "3D LIFT",      min: 0,  max: 1.2, step: 0.01, def: 0.0 },
+    { label: "PALETTE CYCLE",min: 0,  max: 2,   step: 0.01, def: 0.8 }
+  ],
+  glsl: `
+vec3 shape_buddha(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float K = P[0];
+  float minEsc = P[1];
+  /* sample c across the classic window, jittered for anti-aliasing */
+  vec2 c = vec2(mix(-2.1, 0.9, q.x), mix(-1.35, 1.35, q.y)) + (rnd.xy - 0.5)*0.004;
+  /* analytic interior cull: main cardioid + period-2 bulb never escape */
+  float xq = c.x - 0.25;
+  float qb = xq*xq + c.y*c.y;
+  if(qb*(qb + xq) < 0.25*c.y*c.y ||
+     (c.x + 1.0)*(c.x + 1.0) + c.y*c.y < 0.0625){
+    col = vec3(0.0); return vec3(0.0, -999.0, 0.0);
+  }
+  vec2 z = vec2(0.0), keep = c;
+  uint h = seed;
+  float esc = -1.0;
+  for(int j = 0; j < 400; j++){
+    if(float(j) >= K) break;
+    z = cmul(z, z) + c;
+    h = hashu(h);
+    if(u2f(h) < 1.0/float(j + 1)) keep = z;   /* reservoir: one visited pt */
+    if(dot(z, z) > 16.0){ esc = float(j); break; }
+  }
+  if(esc < 0.0 || esc < minEsc){       /* keep only slow-escaping orbits */
+    col = vec3(0.0); return vec3(0.0, -999.0, 0.0);
+  }
+  float t = clamp(esc/K, 0.0, 1.0);
+  float s = P[2];
+  vec3 p = vec3((keep.x + 0.5)*s, P[3]*(t - 0.3), keep.y*s);
+  col = pal(0.5 + P[4]*t, vec3(0.5, 0.42, 0.38), vec3(0.5, 0.46, 0.5),
+            vec3(1.0), vec3(0.0, 0.18, 0.36));
+  col *= 0.45 + 1.0*t;
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/14-flows.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "flows",
+  name: "Strange Attractors of Flow",
+  roman: "XIV",
+  accent: "#7ad9c4",
+  tex: "\\dot{\\mathbf{x}} = \\mathbf{f}(\\mathbf{x}),\\qquad \\text{Lorenz: }\\dot x=\\sigma(y-x),\\;\\dot y=x(\\rho-z)-y,\\;\\dot z=xy-\\beta z",
+  plain: "ẋ = f(x)   (Lorenz: ẋ=σ(y−x), ẏ=x(ρ−z)−y, ż=xy−βz)",
+  caption: "Continuous-time chaos. A cloud of initial conditions is integrated forward by Runge–Kutta; each forgets where it began and settles onto the attractor, so brightness is the SRB measure — the long-run fraction of time the flow spends in each region. One dial walks a whole zoo: Lorenz's butterfly, Rössler's scroll, the Aizawa torus-knot, Thomas's cyclic lattice, Halvorsen's braid, Chua's double scroll. Colour reads local speed; the bright cores are where the flow lingers.",
+  cam: { dist: 3.4, pitch: 0.20, tgtY: 0.0, rot: 0.05 },
+  gain: 0.55,
+  params: [
+    { label: "SYSTEM",   min: 0,     max: 5,    step: 1,     def: 0    },
+    { label: "STEPS",    min: 40,    max: 380,  step: 1,     def: 170  },
+    { label: "dt",       min: 0.002, max: 0.02, step: 0.0005,def: 0.008 },
+    { label: "SPREAD",   min: 0,     max: 1,    step: 0.01,  def: 0.7  },
+    { label: "PARAM",    min: 0,     max: 1,    step: 0.005, def: 0.5  },
+    { label: "SPEED HUE",min: 0,     max: 3,    step: 0.01,  def: 1.0  }
+  ],
+  glsl: `
+vec3 flows_deriv(int sys, vec3 s, float prm){
+  float x = s.x, y = s.y, z = s.z;
+  if(sys == 0){                       /* Lorenz */
+    float rho = mix(20.0, 40.0, prm);
+    return vec3(10.0*(y - x), x*(rho - z) - y, x*y - 2.6666667*z);
+  } else if(sys == 1){                /* Rössler */
+    float cc = mix(4.0, 9.0, prm);
+    return vec3(-y - z, x + 0.2*y, 0.2 + z*(x - cc));
+  } else if(sys == 2){                /* Aizawa */
+    float a=0.95, b=0.7, c=0.6, d=3.5, e=0.25, f=0.1;
+    return vec3((z - b)*x - d*y, d*x + (z - b)*y,
+                c + a*z - z*z*z/3.0 - (x*x + y*y)*(1.0 + e*z) + f*z*x*x*x);
+  } else if(sys == 3){                /* Thomas */
+    float b = mix(0.10, 0.21, prm);
+    return vec3(sin(y) - b*x, sin(z) - b*y, sin(x) - b*z);
+  } else if(sys == 4){                /* Halvorsen */
+    float a = mix(1.4, 1.9, prm);
+    return vec3(-a*x - 4.0*y - 4.0*z - y*y,
+                -a*y - 4.0*z - 4.0*x - z*z,
+                -a*z - 4.0*x - 4.0*y - x*x);
+  }                                   /* Chua double scroll */
+  float m0 = -1.143, m1 = -0.714;
+  float hx = m1*x + 0.5*(m0 - m1)*(abs(x + 1.0) - abs(x - 1.0));
+  float alpha = mix(9.0, 16.0, prm);
+  return vec3(alpha*(y - x - hx), x - y + z, -28.0*y);
+}
+vec3 shape_flows(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int sys = int(P[0] + 0.5);
+  float dt = P[2], prm = P[4];
+  float icS, outS; vec3 outC;
+  if(sys == 0){ icS = 24.0; outS = 0.042; outC = vec3(0.0, 0.0, 25.0); }
+  else if(sys == 1){ icS = 10.0; outS = 0.075; outC = vec3(0.0, 0.0, 3.0); }
+  else if(sys == 2){ icS = 1.4;  outS = 0.90;  outC = vec3(0.0); }
+  else if(sys == 3){ icS = 7.0;  outS = 0.28;  outC = vec3(0.0); }
+  else if(sys == 4){ icS = 3.0;  outS = 0.13;  outC = vec3(0.0); }
+  else { icS = 3.0; outS = 0.20; outC = vec3(0.0); }
+  vec3 s = (vec3(rnd.x, rnd.y, rnd.z) - 0.5)*icS + outC*0.5;
+  float steps = P[1]*(0.45 + 0.55*rnd.w*P[3]);  /* randomize total time */
+  vec3 prev = s;
+  for(int j = 0; j < 380; j++){
+    if(float(j) >= steps) break;
+    vec3 k1 = flows_deriv(sys, s, prm);
+    vec3 k2 = flows_deriv(sys, s + 0.5*dt*k1, prm);
+    vec3 k3 = flows_deriv(sys, s + 0.5*dt*k2, prm);
+    vec3 k4 = flows_deriv(sys, s + dt*k3, prm);
+    prev = s;
+    s += dt/6.0*(k1 + 2.0*k2 + 2.0*k3 + k4);
+    if(dot(s, s) > 1.0e6) break;      /* divergence guard */
+  }
+  if(any(isnan(s)) || any(isinf(s))){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  float sp = length(s - prev)/max(dt, 1.0e-4);
+  vec3 p = (s - outC)*outS;
+  p = vec3(p.x, p.z, p.y);            /* z upright for the camera */
+  col = pal(clamp(sp*0.05*P[5], 0.0, 1.0)*0.8 + 0.05,
+            vec3(0.42, 0.42, 0.55), vec3(0.40, 0.40, 0.45),
+            vec3(1.0, 0.95, 0.85), vec3(0.55, 0.40, 0.20));
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/15-orbital.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "orbital",
+  name: "Hydrogen Orbitals",
+  roman: "XV",
+  accent: "#9fd0ff",
+  tex: "\\psi_{n\\ell m}(r,\\theta,\\phi)=R_{n\\ell}(r)\\,Y_\\ell^{m}(\\theta,\\phi),\\qquad \\rho=|\\psi_{n\\ell m}|^2",
+  plain: "ψₙₗₘ = Rₙₗ(r)·Yₗᵐ(θ,φ),   ρ = |ψₙₗₘ|²",
+  caption: "The electron, seen honestly — not as a dot on an orbit but as a probability density. Each point is a genuine sample drawn from |ψ|²: the radius is importance-sampled from the Rₙₗ envelope so the accepted cloud is the exact quantum distribution, radial nodes and all. Where the wavefunction vanishes, the cloud goes dark — the spherical shells of the s-states, the pinched waists of the p's and d's. Warm and cool lobes carry the sign of ψ. Dial n, ℓ, m by hand; the whole periodic table of shapes is in there.",
+  cam: { dist: 3.0, pitch: 0.24, tgtY: 0.0, rot: 0.05 },
+  gain: 1.0,
+  params: [
+    { label: "n (shell)",  min: 1, max: 4,   step: 1,    def: 3   },
+    { label: "ℓ (subshell)",min: 0, max: 3,  step: 1,    def: 2   },
+    { label: "m",          min: -3,max: 3,   step: 1,    def: 0   },
+    { label: "SIZE",       min: 0.02,max: 0.12,step: 0.001,def: 0.055 },
+    { label: "DENSITY",    min: 0.2,max: 4,  step: 0.02, def: 1.6 },
+    { label: "GLOW",       min: 0, max: 1,   step: 0.01, def: 0.6 }
+  ],
+  glsl: `
+float orbital_L(int n, int l, float x){    /* associated Laguerre L_{n-l-1}^{2l+1}(x) */
+  float a = float(2*l + 1);
+  int p = n - l - 1;
+  if(p <= 0) return 1.0;
+  float Lkm1 = 1.0;
+  float Lk = 1.0 + a - x;
+  float L = Lk;
+  for(int k = 1; k < 3; k++){
+    if(k >= p) break;
+    float Lkp1 = ((2.0*float(k) + 1.0 + a - x)*Lk - (float(k) + a)*Lkm1)/(float(k) + 1.0);
+    Lkm1 = Lk; Lk = Lkp1; L = Lkp1;
+  }
+  return L;
+}
+float orbital_Ylm(int l, int m, float ct, float st, float phi){
+  int am = m < 0 ? -m : m;
+  float az = (m > 0) ? cos(float(am)*phi) : (m < 0 ? sin(float(am)*phi) : 1.0);
+  float Pl;
+  if(l == 0) Pl = 1.0;
+  else if(l == 1) Pl = (am == 0) ? ct : st;
+  else if(l == 2) Pl = (am == 0) ? (1.5*ct*ct - 0.5) : (am == 1 ? st*ct : st*st);
+  else Pl = (am == 0) ? (ct*(2.5*ct*ct - 1.5))
+          : (am == 1 ? st*(5.0*ct*ct - 1.0)
+          : (am == 2 ? st*st*ct : st*st*st));
+  return Pl*az;
+}
+vec3 shape_orbital(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int n = int(P[0] + 0.5); n = max(1, min(4, n));
+  int l = int(P[1] + 0.5); l = max(0, min(n - 1, l));
+  int m = int(floor(P[2] + (P[2] < 0.0 ? -0.5 : 0.5))); m = max(-l, min(l, m));
+  float ct = 1.0 - 2.0*q.x;
+  float st = sqrt(max(0.0, 1.0 - ct*ct));
+  float ph = TAU*q.y;
+  vec3 dir = vec3(st*cos(ph), ct, st*sin(ph));
+  /* radius ~ Gamma(2l+3, n/2): exactly the R_nl envelope r^{2l+2} e^{-2r/n} */
+  int kG = 2*l + 3;
+  float r = 0.0; uint h = seed;
+  for(int i = 0; i < 9; i++){ if(i >= kG) break; h = hashu(h); r += -log(max(1.0e-6, u2f(h))); }
+  r *= float(n)*0.5;
+  float x = 2.0*r/float(n);
+  float amp = orbital_L(n, l, x) * orbital_Ylm(l, m, ct, st, ph);
+  if(rnd.w > amp*amp*P[4]){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  vec3 p = dir * r * P[3];
+  col = mix(vec3(0.25, 0.55, 1.0), vec3(1.0, 0.52, 0.20), step(0.0, amp))
+      * (0.35 + 0.9*P[5]);
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/16-tpms.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "tpms",
+  name: "Minimal Surfaces",
+  roman: "XVI",
+  accent: "#b6e08f",
+  tex: "\\text{Gyroid: }\\;\\sin x\\cos y+\\sin y\\cos z+\\sin z\\cos x=c",
+  plain: "Gyroid:  sin x cos y + sin y cos z + sin z cos x = c",
+  caption: "A surface that tiles space, curving everywhere yet flat on average — mean curvature zero at every point. These triply-periodic minimal surfaces are what soap films, block copolymers and butterfly-wing photonic crystals settle into. Points are sampled through a block of unit cells and then Newton-projected straight onto the level set, so almost none are wasted and brightness traces the surface's own area. The LEVEL dial thickens or opens the labyrinth; SLAB CUT shears the block away so you can see inside the weave. Colour is the surface normal.",
+  cam: { dist: 3.2, pitch: 0.28, tgtY: 0.0, rot: 0.05 },
+  gain: 0.85,
+  params: [
+    { label: "SURFACE",     min: 0, max: 3,   step: 1,    def: 0   },
+    { label: "LEVEL c",     min: -1.3,max: 1.3,step: 0.01,def: 0.0 },
+    { label: "CELLS",       min: 1, max: 4,   step: 1,    def: 2   },
+    { label: "NEWTON STEPS",min: 1, max: 4,   step: 1,    def: 3   },
+    { label: "SLAB CUT",    min: 0, max: 1,   step: 0.01, def: 0.0 },
+    { label: "GLOW",        min: 0, max: 1,   step: 0.01, def: 0.5 }
+  ],
+  glsl: `
+float tpms_F(int s, vec3 p, float level){
+  float x = p.x, y = p.y, z = p.z, v;
+  if(s == 0) v = sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x);   /* gyroid */
+  else if(s == 1) v = cos(x) + cos(y) + cos(z);                   /* Schwarz P */
+  else if(s == 2) v = cos(x)*cos(y)*cos(z) - sin(x)*sin(y)*sin(z);/* Schwarz D */
+  else v = 3.0*(cos(x) + cos(y) + cos(z)) + 4.0*cos(x)*cos(y)*cos(z); /* Neovius */
+  return v - level;
+}
+vec3 tpms_grad(int s, vec3 p, float level){
+  float e = 0.012;
+  return vec3(tpms_F(s, p + vec3(e,0,0), level) - tpms_F(s, p - vec3(e,0,0), level),
+              tpms_F(s, p + vec3(0,e,0), level) - tpms_F(s, p - vec3(0,e,0), level),
+              tpms_F(s, p + vec3(0,0,e), level) - tpms_F(s, p - vec3(0,0,e), level))/(2.0*e);
+}
+vec3 shape_tpms(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int s = int(P[0] + 0.5);
+  float level = P[1];
+  float cells = P[2];
+  vec3 p = (vec3(q.x, q.y, rnd.x) - 0.5) * (TAU*cells);
+  for(int it = 0; it < 4; it++){
+    if(float(it) >= P[3]) break;
+    float f = tpms_F(s, p, level);
+    vec3 g = tpms_grad(s, p, level);
+    p -= f*g/(dot(g, g) + 1.0e-4);
+  }
+  if(abs(tpms_F(s, p, level)) > 0.08){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  float scl = 2.6/(TAU*cells);
+  vec3 world = p*scl;
+  if(world.z > (0.5 - P[4])*5.2){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }  /* slab cut */
+  vec3 nrm = normalize(tpms_grad(s, p, level) + 1.0e-5);
+  col = (0.30 + 0.70*abs(nrm)) * (0.55 + 0.7*P[5]);
+  return world;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/17-kleinian.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "kleinian",
+  name: "Indra's Pearls",
+  roman: "XVII",
+  accent: "#f6a6ff",
+  tex: "z\\mapsto C_k+\\dfrac{r_k^2\\,(z-C_k)}{|z-C_k|^2},\\qquad \\Lambda=\\overline{\\langle\\text{inversions}\\rangle\\cdot z_0}",
+  plain: "z ↦ Cₖ + rₖ²(z−Cₖ)/|z−Cₖ|²   (limit set of the inversion group)",
+  caption: "Reflect a point in one of a ring of circles, chosen at random, and repeat forever. The orbit is drawn onto the limit set of the group the circles generate — a self-similar necklace where every pearl is fringed by smaller pearls, the fractal that Klein glimpsed and Mandelbrot rendered. At tangency the circles kiss and the gasket condenses; the RADIUS dial walks it from scattered dust through the perfect gasket to overlap. The whole thing is wrapped back onto a sphere by inverse stereographic projection so it turns in space.",
+  cam: { dist: 3.2, pitch: 0.20, tgtY: 0.0, rot: 0.06 },
+  gain: 0.7,
+  params: [
+    { label: "CIRCLES",     min: 3, max: 6,   step: 1,    def: 3   },
+    { label: "RING",        min: 0.6,max: 1.6, step: 0.01,def: 1.0 },
+    { label: "RADIUS ×tan", min: 0.6,max: 1.25,step: 0.005,def: 1.0 },
+    { label: "ITERATIONS",  min: 6, max: 40,  step: 1,    def: 22  },
+    { label: "SCALE",       min: 0.6,max: 1.8, step: 0.01,def: 1.2 },
+    { label: "SPHERE ↔ FLAT",min: 0, max: 1,   step: 0.01,def: 1.0 },
+    { label: "GLOW",        min: 0, max: 1,   step: 0.01, def: 0.55 }
+  ],
+  glsl: `
+vec3 shape_kleinian(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int nc = int(P[0] + 0.5); nc = max(3, min(6, nc));
+  float ncf = float(nc);
+  float ring = P[1];
+  float cr = P[2]*ring*sin(PI/ncf);       /* ×tangency radius */
+  vec2 z = (rnd.xy - 0.5)*2.0*ring;
+  uint h = seed;
+  float last = 0.0;
+  for(int j = 0; j < 40; j++){
+    if(float(j) >= P[3]) break;
+    h = hashu(h);
+    float k = floor(u2f(h)*ncf);
+    float a = k/ncf*TAU;
+    vec2 C = ring*vec2(cos(a), sin(a));
+    vec2 d = z - C;
+    z = C + cr*cr*d/(dot(d, d) + 1.0e-6);  /* circle inversion */
+    last = k;
+  }
+  vec3 flat3 = vec3(z*P[4], 0.0);
+  float dd = dot(z, z);
+  vec3 sph = vec3(2.0*z.x, 2.0*z.y, dd - 1.0)/(dd + 1.0) * (P[4]*1.15);
+  vec3 p = mix(flat3, sph, clamp(P[5], 0.0, 1.0));
+  col = pal(last/ncf*0.9 + 0.05, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col *= 0.5 + 0.7*P[6];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/18-caustic.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "caustic",
+  name: "Caustics",
+  roman: "XVIII",
+  accent: "#ffe08a",
+  tex: "\\text{envelope of }\\{L_s\\}:\\quad F(x,y,s)=0,\\;\\partial_s F=0",
+  plain: "envelope of a family of rays: F(x,y,s)=0, ∂F/∂s=0",
+  caption: "The bright cusp of light in the bottom of a coffee cup. Nowhere is any single ray special — but where a whole family of rays crowds together, the light piles up, and the envelope ignites on its own. Nothing here computes the caustic curve; each point is just one spot on one ray, and the caustic emerges purely as the density where neighbouring rays overlap. This is the plate's whole thesis in its purest form: brightness is measure. Reflect off a circle for the nephroid and cardioid, slide a ladder for the astroid, draw chords for the rest.",
+  cam: { dist: 3.0, pitch: 0.55, tgtY: 0.0, rot: 0.02 },
+  gain: 0.8,
+  params: [
+    { label: "FAMILY",   min: 0, max: 2,   step: 1,    def: 0   },
+    { label: "SOURCE",   min: 0, max: 1,   step: 0.01, def: 0.0 },
+    { label: "RAY LENGTH",min: 0.3,max: 2.6,step: 0.01,def: 1.6 },
+    { label: "SCALE",    min: 0.5,max: 1.6, step: 0.01, def: 1.0 },
+    { label: "GLOW",     min: 0, max: 1,   step: 0.01, def: 0.4 }
+  ],
+  glsl: `
+vec3 shape_caustic(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int fam = int(P[0] + 0.5);
+  float src = P[1];
+  vec2 pos;
+  if(fam == 0){                          /* reflection off a circular mirror */
+    float theta = mix(0.5, 2.5, q.y)*PI;
+    vec2 A = vec2(cos(theta), sin(theta));
+    vec2 dpar = vec2(-1.0, 0.0);
+    vec2 Src = vec2(-1.0, 0.0);
+    vec2 dpt = normalize(A - Src + 1.0e-4);
+    vec2 din = normalize(mix(dpar, dpt, src));
+    vec2 n = -A;                          /* interior normal */
+    vec2 refl = din - 2.0*dot(din, n)*n;
+    pos = A + refl*(q.x*P[2]);
+  } else if(fam == 1){                    /* trammel of Archimedes -> astroid */
+    float b = q.y*PI*0.5 + 0.002;
+    pos = mix(vec2(cos(b), 0.0), vec2(0.0, sin(b)), q.x);
+  } else {                                /* chords -> cardioid / nephroid */
+    float a = q.y*TAU;
+    float mf = mix(2.0, 3.0, src);
+    pos = mix(vec2(cos(a), sin(a)), vec2(cos(mf*a), sin(mf*a)), q.x);
+  }
+  vec3 p = vec3(pos.x, pos.y, 0.0)*P[3];
+  col = pal(q.y*0.6 + 0.08, vec3(0.5, 0.46, 0.4), vec3(0.5, 0.45, 0.42),
+            vec3(1.0, 0.96, 0.85), vec3(0.05, 0.2, 0.42));
+  col *= 0.3 + 0.5*P[4];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/19-bifurc.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "bifurc",
+  name: "The Feigenbaum Tree",
+  roman: "XIX",
+  accent: "#ff9e7a",
+  tex: "x_{n+1}=r\\,x_n(1-x_n),\\qquad \\lambda=\\lim_{N\\to\\infty}\\tfrac1N\\sum_{n}\\ln|r(1-2x_n)|",
+  plain: "xₙ₊₁ = r xₙ(1−xₙ),   λ = ⟨ ln|r(1−2xₙ)| ⟩",
+  caption: "Turn one dial, r, and watch a fixed point split in two, then four, then eight — period doubling accelerating by Feigenbaum's universal ratio until, at r ≈ 3.5699, order dissolves into chaos. The horizontal axis is r; the vertical is where the map's orbit lands, so brightness is the invariant density — the bright chaotic bands with their square-root edges, threaded by white windows of returning order. Depth and colour read the Lyapunov exponent: cool where the map forgets perturbations, warm where it amplifies them.",
+  cam: { dist: 3.3, pitch: 0.18, tgtY: 0.0, rot: 0.03 },
+  gain: 0.75,
+  params: [
+    { label: "BURN-IN",   min: 100, max: 500, step: 1,    def: 300 },
+    { label: "r MIN",     min: 2.5, max: 4.0, step: 0.001,def: 2.8 },
+    { label: "r MAX",     min: 2.5, max: 4.0, step: 0.001,def: 4.0 },
+    { label: "λ RELIEF",  min: 0,   max: 1.2, step: 0.01, def: 0.5 },
+    { label: "MAP",       min: 0,   max: 2,   step: 1,    def: 0   },
+    { label: "GLOW",      min: 0,   max: 1,   step: 0.01, def: 0.6 }
+  ],
+  glsl: `
+vec3 shape_bifurc(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mt = int(P[4] + 0.5);
+  float r = mix(P[1], P[2], q.x);
+  float x = 0.2 + 0.6*rnd.x;
+  float burn = P[0];
+  float extra = floor(rnd.y*60.0);
+  float total = burn + extra;
+  float lyap = 0.0, cnt = 0.0;
+  for(int j = 0; j < 600; j++){
+    if(float(j) >= total) break;
+    float d;
+    if(mt == 0){ d = r*(1.0 - 2.0*x); x = r*x*(1.0 - x); }
+    else if(mt == 1){ float rs = r*0.25; d = rs*PI*cos(PI*x); x = rs*sin(PI*x); }
+    else { float mu = r*0.5; if(x < 0.5){ d = mu; x = mu*x; } else { d = -mu; x = mu*(1.0 - x); } }
+    if(float(j) >= burn){ lyap += log(abs(d) + 1.0e-9); cnt += 1.0; }
+  }
+  float lam = lyap/max(cnt, 1.0);
+  float p_z = P[3]*clamp(lam, -1.0, 1.0);
+  vec3 p = vec3((q.x - 0.5)*2.6, (x - 0.5)*2.2, p_z);
+  col = mix(vec3(0.3, 0.6, 1.0), vec3(1.0, 0.5, 0.2), smoothstep(-0.12, 0.12, lam));
+  col *= 0.4 + 0.9*P[5];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/20-stdmap.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "stdmap",
+  name: "The Chirikov Standard Map",
+  roman: "XX",
+  accent: "#8fb8ff",
+  tex: "p_{n+1}=p_n+\\tfrac{K}{2\\pi}\\sin 2\\pi\\theta_n,\\qquad \\theta_{n+1}=\\theta_n+p_{n+1}\\ (\\mathrm{mod}\\ 1)",
+  plain: "pₙ₊₁ = pₙ + (K/2π) sin 2πθₙ,   θₙ₊₁ = θₙ + pₙ₊₁ (mod 1)",
+  caption: "The simplest window into Hamiltonian chaos: a rotor given a periodic kick. At each kick strength K the phase plane divides itself, and the density does the sorting for free — regular orbits trace razor-thin invariant curves (the surviving KAM tori), while chaotic ones smear into a dim area-filling sea. As K climbs past 0.9716 the last golden torus breaks and the seas merge. A tangent vector carried along each orbit measures the finite-time Lyapunov exponent: cool where motion is ordered, hot where it is mixing.",
+  cam: { dist: 3.2, pitch: 0.75, tgtY: 0.0, rot: 0.02 },
+  gain: 0.7,
+  params: [
+    { label: "KICK K",     min: 0,   max: 6,   step: 0.005,def: 0.97 },
+    { label: "ITERATIONS", min: 20,  max: 400, step: 1,    def: 220  },
+    { label: "TORUS ↔ FLAT",min: 0,  max: 1,   step: 0.01, def: 0.0  },
+    { label: "FTLE GAIN",  min: 0.2, max: 3,   step: 0.01, def: 1.0  },
+    { label: "GLOW",       min: 0,   max: 1,   step: 0.01, def: 0.55 }
+  ],
+  glsl: `
+vec3 shape_stdmap(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float K = P[0];
+  int N = int(P[1]);
+  float th = q.x, p = q.y;               /* low-discrepancy IC over phase space */
+  vec2 dv = normalize(rnd.xy - 0.5 + vec2(1.0e-3, 7.0e-4));  /* tangent (dθ,dp) */
+  float lyap = 0.0;
+  for(int j = 0; j < 400; j++){
+    if(j >= N) break;
+    float c = K*cos(TAU*th);
+    float ddp = dv.y + c*dv.x;            /* Jacobian action */
+    float ddth = dv.x + ddp;
+    dv = vec2(ddth, ddp);
+    float nl = length(dv);
+    lyap += log(nl + 1.0e-9);
+    dv /= nl;
+    p = fract(p + (K/TAU)*sin(TAU*th));   /* state update */
+    th = fract(th + p);
+  }
+  float ftle = lyap/float(N);
+  vec2 uv = vec2(th, p);
+  vec3 flat3 = vec3((uv.x - 0.5)*2.4, (uv.y - 0.5)*2.4, 0.0);
+  float a = TAU*uv.x, b = TAU*uv.y, R = 1.2, rr = 0.5;
+  vec3 tor = vec3((R + rr*cos(b))*cos(a), rr*sin(b), (R + rr*cos(b))*sin(a));
+  vec3 pp = mix(flat3, tor, clamp(P[2], 0.0, 1.0));
+  col = mix(vec3(0.3, 0.6, 1.0), vec3(1.0, 0.5, 0.2), smoothstep(0.0, 0.6, ftle*P[3]));
+  col *= 0.4 + 0.8*P[4];
+  return pp;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/21-domain.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "domain",
+  name: "Domain Coloring",
+  roman: "XXI",
+  accent: "#c0b0ff",
+  tex: "w=f(z):\\quad \\text{height}=\\log|f|,\\quad \\text{hue}=\\arg f",
+  plain: "w = f(z):   height = log|f|,   hue = arg f",
+  caption: "A complex function has no graph you can draw — its input and output each need a plane. So paint the input: at every point z, the hue names the direction of f(z) and the height is log|f(z)|. Zeros become pits where all colours meet, poles become spires, and the winding of hue around each counts its order. Here are z³−1's three-fold pinwheel, a rational map's zeros and poles, the gamma function's marching poles at the negative integers, and Weierstrass's ℘ with its double poles on a lattice.",
+  cam: { dist: 3.4, pitch: 0.5, tgtY: 0.25, rot: 0.03 },
+  gain: 0.9,
+  params: [
+    { label: "FUNCTION",  min: 0,   max: 3,   step: 1,    def: 0   },
+    { label: "ZOOM",      min: 0.4, max: 8,   step: 0.05, def: 1   },
+    { label: "CENTER RE", min: -2,  max: 2,   step: 0.01, def: 0   },
+    { label: "CENTER IM", min: -2,  max: 2,   step: 0.01, def: 0   },
+    { label: "RELIEF",    min: 0,   max: 1.2, step: 0.01, def: 0.5 },
+    { label: "CONTOURS",  min: 0,   max: 4,   step: 0.01, def: 1.5 }
+  ],
+  glsl: `
+vec2 domain_cexp(vec2 z){ float e = exp(z.x); return e*vec2(cos(z.y), sin(z.y)); }
+vec2 domain_clog(vec2 z){ return vec2(log(length(z) + 1.0e-30), atan(z.y, z.x)); }
+vec2 domain_csin(vec2 z){ return vec2(sin(z.x)*cosh(z.y), cos(z.x)*sinh(z.y)); }
+vec2 domain_cpowc(vec2 b, vec2 e){ return domain_cexp(cmul(e, domain_clog(b))); }
+vec2 domain_gamma(vec2 zz){
+  bool refl = zz.x < 0.5;
+  vec2 z = refl ? (vec2(1.0, 0.0) - zz) : zz;
+  z -= vec2(1.0, 0.0);
+  vec2 x = vec2(0.99999999999980993, 0.0);
+  x += 676.5203681218851     * cinv(z + vec2(1.0, 0.0));
+  x += -1259.1392167224028   * cinv(z + vec2(2.0, 0.0));
+  x += 771.32342877765313    * cinv(z + vec2(3.0, 0.0));
+  x += -176.61502916214059   * cinv(z + vec2(4.0, 0.0));
+  x += 12.507343278686905    * cinv(z + vec2(5.0, 0.0));
+  x += -0.13857109526572012  * cinv(z + vec2(6.0, 0.0));
+  x += 9.9843695780195716e-6 * cinv(z + vec2(7.0, 0.0));
+  x += 1.5056327351493116e-7 * cinv(z + vec2(8.0, 0.0));
+  vec2 t = z + vec2(7.5, 0.0);
+  vec2 res = 2.5066282746310002 * cmul(cmul(domain_cpowc(t, z + vec2(0.5, 0.0)),
+                                            domain_cexp(vec2(-t.x, -t.y))), x);
+  if(refl){ res = cdiv(vec2(PI, 0.0), cmul(domain_csin(PI*zz), res)); }
+  return res;
+}
+vec2 domain_wp(vec2 z){
+  vec2 s = cinv(cmul(z, z));
+  for(int m = -2; m <= 2; m++){
+    for(int n = -2; n <= 2; n++){
+      if(m == 0 && n == 0) continue;
+      vec2 w = vec2(float(m), float(n));
+      vec2 d = z - w;
+      s += cinv(cmul(d, d)) - cinv(cmul(w, w));
+    }
+  }
+  return s;
+}
+vec2 domain_f(int fn, vec2 z){
+  if(fn == 0) return cmul(cmul(z, z), z) - vec2(1.0, 0.0);
+  if(fn == 1) return cdiv(cmul(z, z) - vec2(1.0, 0.0), cmul(z, z) + vec2(1.0, 0.0));
+  if(fn == 2) return domain_gamma(z);
+  return domain_wp(z);
+}
+vec3 shape_domain(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int fn = int(P[0] + 0.5);
+  vec2 win = vec2(q.x, q.y) - 0.5;
+  vec2 z = vec2(P[2], P[3]) + win*(6.0/P[1]) + (rnd.xy - 0.5)*0.004;
+  vec2 w = domain_f(fn, z);
+  float mag = length(w);
+  float arg = atan(w.y, w.x);
+  float h = clamp(log(mag + 1.0e-4), -4.0, 4.0)*P[4];
+  vec3 p = vec3(win.x*2.4, h, win.y*2.4);
+  float hue = arg/TAU + 0.5;
+  col = pal(fract(hue), vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  float band = 0.5 + 0.5*cos(TAU*log(mag + 1.0e-4)*P[5]);
+  col *= 0.4 + 0.95*band;
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/22-rmt.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "rmt",
+  name: "Spectra of Random Matrices",
+  roman: "XXII",
+  accent: "#a0e0d0",
+  tex: "\\rho_{\\text{sc}}(x)=\\tfrac{2}{\\pi}\\sqrt{1-x^2},\\qquad \\text{Ginibre: }|\\lambda|^2\\stackrel{d}{=}\\tfrac1N\\,\\Gamma(k)",
+  plain: "Wigner: ρ(x) = (2/π)√(1−x²);   Ginibre: |λ|² ~ Γ(k)/N",
+  caption: "Fill a large matrix with random numbers and its eigenvalues, astonishingly, obey a law. A symmetric matrix gives Wigner's semicircle; a matrix with no symmetry at all gives Ginibre's uniform disk with its razor circular edge; a covariance matrix gives Marchenko–Pastur. None of these is simulated by diagonalizing — each ensemble is drawn from its exact finite-N law (Ginibre by Kostlan's theorem, the others by their inverse spectral CDF), so brightness is the limiting spectral measure itself.",
+  cam: { dist: 3.2, pitch: 0.42, tgtY: 0.0, rot: 0.03 },
+  gain: 0.8,
+  params: [
+    { label: "ENSEMBLE",  min: 0,  max: 2,   step: 1,    def: 0   },
+    { label: "SIZE N",    min: 8,  max: 100, step: 1,    def: 60  },
+    { label: "MP ASPECT", min: 0.05,max: 1,  step: 0.01, def: 0.4 },
+    { label: "SCALE",     min: 0.6,max: 1.6, step: 0.01, def: 1.1 },
+    { label: "HEIGHT",    min: 0,  max: 1.5, step: 0.01, def: 0.8 },
+    { label: "GLOW",      min: 0,  max: 1,   step: 0.01, def: 0.6 }
+  ],
+  glsl: `
+vec3 shape_rmt(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int ens = int(P[0] + 0.5);
+  float scl = P[3];
+  vec3 p; float shade;
+  if(ens == 0){                       /* Ginibre circular law (Kostlan) */
+    int N = int(P[1]); N = max(4, min(100, N));
+    uint h = hashu(seed);
+    int k = 1 + int(u2f(h)*float(N));
+    float s = 0.0;
+    for(int i = 0; i < 100; i++){ if(i >= k) break; h = hashu(h); s += -log(max(1.0e-6, u2f(h))); }
+    float rad = sqrt(s/float(N));
+    float th = TAU*q.x;
+    p = vec3(rad*cos(th)*scl, (rnd.z - 0.5)*0.03, rad*sin(th)*scl);
+    shade = rad;
+  } else if(ens == 1){                /* Wigner semicircle */
+    float x = 2.0*q.x - 1.0;
+    float rho = (2.0/PI)*sqrt(max(0.0, 1.0 - x*x));
+    p = vec3(x*1.35*scl, (q.y - 0.5)*2.0*rho*P[4], (rnd.z - 0.5)*0.04);
+    shade = rho;
+  } else {                            /* Marchenko-Pastur */
+    float g = clamp(P[2], 0.05, 1.0);
+    float sg = sqrt(g);
+    float lm = (1.0 - sg)*(1.0 - sg), lp = (1.0 + sg)*(1.0 + sg);
+    float x = mix(lm, lp, q.x);
+    float rho = sqrt(max(0.0, (lp - x)*(x - lm)))/(TAU*g*max(x, 1.0e-3));
+    p = vec3((x - 0.5*(lp + lm))*0.9*scl, (q.y - 0.5)*2.0*rho*P[4], (rnd.z - 0.5)*0.04);
+    shade = rho;
+  }
+  col = pal(clamp(shade, 0.0, 1.0)*0.7 + 0.1, vec3(0.5, 0.45, 0.5), vec3(0.5, 0.45, 0.45),
+            vec3(1.0, 0.95, 0.9), vec3(0.1, 0.25, 0.5));
+  col *= 0.45 + 0.85*P[5];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/23-invjulia.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "invjulia",
+  name: "The Julia Set, Run Backwards",
+  roman: "XXIII",
+  accent: "#ff8fbf",
+  tex: "z\\;\\mapsto\\;\\pm\\sqrt{z-c}\\quad(\\text{random sign}),\\qquad J_c=\\overline{\\{\\text{backward orbit}\\}}",
+  plain: "z ↦ ±√(z−c)  (random branch),   Jc = closure of the backward orbit",
+  caption: "The Julia set of z²+c is where forward orbits are chaotic — impossible to hit by iterating forwards. But run the map backwards: each point has two preimages, ±√(z−c), and choosing between them at random is a chaos game whose attractor is exactly the Julia set. A few steps and every point lands on it, no matter where it started. Steer c across the plane and the set breathes — connected dendrites and rabbits while c sits inside the Mandelbrot set, exploding into dust the moment it leaves.",
+  cam: { dist: 3.2, pitch: 0.28, tgtY: 0.0, rot: 0.05 },
+  gain: 0.7,
+  params: [
+    { label: "C · RE",      min: -1, max: 1,   step: 0.005,def: -0.40 },
+    { label: "C · IM",      min: -1, max: 1,   step: 0.005,def:  0.60 },
+    { label: "ITERATIONS",  min: 8,  max: 60,  step: 1,    def: 40   },
+    { label: "SCALE",       min: 0.6,max: 1.6, step: 0.01, def: 1.1  },
+    { label: "SPHERE ↔ FLAT",min: 0, max: 1,   step: 0.01, def: 0.0  },
+    { label: "GLOW",        min: 0,  max: 1,   step: 0.01, def: 0.6  }
+  ],
+  glsl: `
+vec3 shape_invjulia(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  vec2 c = vec2(P[0], P[1]);
+  vec2 z = (rnd.xy - 0.5)*2.0;
+  uint h = seed;
+  float br = 0.0;
+  for(int j = 0; j < 60; j++){
+    if(float(j) >= P[2]) break;
+    z = csqrt(z - c);
+    h = hashu(h);
+    if(u2f(h) < 0.5) z = -z;
+    br = u2f(h);
+  }
+  vec3 flat3 = vec3(z*P[3], 0.0);
+  float dd = dot(z, z);
+  vec3 sph = vec3(2.0*z.x, 2.0*z.y, dd - 1.0)/(dd + 1.0) * (P[3]*1.1);
+  vec3 p = mix(flat3, sph, clamp(P[4], 0.0, 1.0));
+  col = pal(atan(z.y, z.x)/TAU + 0.5, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col *= 0.5 + 0.65*P[5];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/24-polytope.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "polytope",
+  name: "Regular Polytopes in 4D",
+  roman: "XXIV",
+  accent: "#b8a0ff",
+  tex: "\\{\\pm1\\}^4\\;(\\text{tesseract}),\\;\\{\\pm e_i\\}\\;(\\text{16-cell}),\\;\\text{perm}(\\pm1,\\pm1,0,0)\\;(\\text{24-cell})",
+  plain: "tesseract {±1}⁴, 16-cell {±eᵢ}, 24-cell perms of (±1,±1,0,0)",
+  caption: "Four-dimensional space holds six regular solids where three dimensions hold five. These are three of them, turning through planes we cannot picture and casting their shadows down into space — each point rides along an edge while the whole figure rotates in two independent 4-planes at once. The self-intersections are only in the shadow; upstairs in 4D the edges never touch. Hue carries the fourth coordinate w, so you can watch cells swing toward you out of the fourth dimension and recede back into it.",
+  cam: { dist: 3.4, pitch: 0.15, tgtY: 0.0, rot: 0.0 },
+  gain: 0.7,
+  params: [
+    { label: "POLYTOPE",  min: 0,   max: 2,   step: 1,    def: 0    },
+    { label: "SPIN XW",   min: -0.5,max: 0.5, step: 0.005,def: 0.17 },
+    { label: "SPIN YZ",   min: -0.5,max: 0.5, step: 0.005,def: 0.11 },
+    { label: "PROJECTION",min: 0,   max: 1,   step: 1,    def: 0    },
+    { label: "SCALE",     min: 0.5, max: 1.4, step: 0.01, def: 0.9  },
+    { label: "EDGE BODY", min: 0,   max: 0.08,step: 0.002,def: 0.02 },
+    { label: "GLOW",      min: 0,   max: 1,   step: 0.01, def: 0.6  }
+  ],
+  glsl: `
+vec4 poly_e(int idx, float val){
+  if(idx == 0) return vec4(val, 0.0, 0.0, 0.0);
+  if(idx == 1) return vec4(0.0, val, 0.0, 0.0);
+  if(idx == 2) return vec4(0.0, 0.0, val, 0.0);
+  return vec4(0.0, 0.0, 0.0, val);
+}
+vec3 shape_polytope(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int poly = int(P[0] + 0.5);
+  uint h = seed;
+  vec4 A, B;
+  if(poly == 0){                      /* tesseract: edge = flip one bit */
+    h = hashu(h); uint vi = h & 15u;
+    A = vec4((vi & 1u) != 0u ? 1.0 : -1.0, (vi & 2u) != 0u ? 1.0 : -1.0,
+             (vi & 4u) != 0u ? 1.0 : -1.0, (vi & 8u) != 0u ? 1.0 : -1.0);
+    h = hashu(h); int ax = int(h % 4u);
+    vec4 flip = vec4(ax == 0 ? -1.0 : 1.0, ax == 1 ? -1.0 : 1.0,
+                     ax == 2 ? -1.0 : 1.0, ax == 3 ? -1.0 : 1.0);
+    B = A*flip;
+  } else if(poly == 1){               /* 16-cell: edge between ±e_a and ±e_b, a≠b */
+    h = hashu(h); int a = int(h % 4u);
+    h = hashu(h); int b = int(h % 4u); if(b == a) b = (b + 1) % 4;
+    h = hashu(h); float sa = (h & 1u) != 0u ? 1.0 : -1.0;
+    h = hashu(h); float sb = (h & 1u) != 0u ? 1.0 : -1.0;
+    A = poly_e(a, sa); B = poly_e(b, sb);
+  } else {                            /* 24-cell: perms of (±1,±1,0,0) */
+    h = hashu(h); int i = int(h % 4u);
+    h = hashu(h); int j = int(h % 4u); if(j == i) j = (j + 1) % 4;
+    h = hashu(h); float si = (h & 1u) != 0u ? 1.0 : -1.0;
+    h = hashu(h); float sj = (h & 1u) != 0u ? 1.0 : -1.0;
+    A = poly_e(i, si) + poly_e(j, sj);
+    h = hashu(h); int k = int(h % 4u); if(k == i) k = (k + 1) % 4;
+    h = hashu(h); float sk = (h & 1u) != 0u ? 1.0 : -1.0;
+    B = poly_e(i, si) + poly_e(k, sk);   /* neighbor shares one signed axis */
+  }
+  vec4 P4 = mix(A, B, q.x);
+  float r1 = P[1]*uT, r2 = P[2]*uT;
+  float c1 = cos(r1), s1 = sin(r1);
+  P4 = vec4(c1*P4.x - s1*P4.w, P4.y, P4.z, s1*P4.x + c1*P4.w);   /* xw plane */
+  float c2 = cos(r2), s2 = sin(r2);
+  P4 = vec4(P4.x, c2*P4.y - s2*P4.z, s2*P4.y + c2*P4.z, P4.w);   /* yz plane */
+  vec3 p3;
+  if(int(P[3] + 0.5) == 0) p3 = P4.xyz*(1.0/(2.6 - P4.w))*2.2;   /* perspective */
+  else p3 = P4.xyz/(2.4 - P4.w*0.7);                             /* flatter */
+  p3 *= P[4];
+  p3 += (rnd.zwz - 0.5)*P[5];          /* edge body */
+  col = pal(P4.w*0.22 + 0.5, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col *= 0.45 + 0.8*P[6];
+  return p3;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/25-newton.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "newton",
+  name: "Newton's Fractal",
+  roman: "XXV",
+  accent: "#ffb84d",
+  tex: "z_{n+1}=z_n-a\\,\\dfrac{z_n^{\\,d}-1}{d\\,z_n^{\\,d-1}},\\qquad \\text{basins of the }d\\text{ roots of unity}",
+  plain: "zₙ₊₁ = zₙ − a (zᵈ−1)/(d zᵈ⁻¹)   — basins of the d-th roots of unity",
+  caption: "Drop Newton's root-finder onto the complex plane and ask, from each starting point, which root it runs to. The answer partitions the plane into basins — but their boundary is no curve. It is a fractal where all d basins meet at once, so that between any two colours you always find the third: the Wada property made visible. Iteration count becomes relief, so the ridges rise along the boundary where the method dithers. Over-relaxation a ≠ 1 shears the whole structure into spirals.",
+  cam: { dist: 3.4, pitch: 0.5, tgtY: 0.2, rot: 0.03 },
+  gain: 0.9,
+  params: [
+    { label: "DEGREE d",   min: 3,   max: 5,   step: 1,    def: 3   },
+    { label: "OVER-RELAX a",min: 0.3,max: 1.6, step: 0.005,def: 1.0 },
+    { label: "ZOOM",       min: 0.4, max: 8,   step: 0.05, def: 1   },
+    { label: "ITERATIONS", min: 8,   max: 80,  step: 1,    def: 40  },
+    { label: "RELIEF",     min: 0,   max: 1.2, step: 0.01, def: 0.6 },
+    { label: "GLOW",       min: 0,   max: 1,   step: 0.01, def: 0.6 }
+  ],
+  glsl: `
+vec2 newton_cpow(vec2 z, int n){
+  vec2 r = vec2(1.0, 0.0);
+  for(int i = 0; i < 4; i++){ if(i >= n) break; r = cmul(r, z); }
+  return r;
+}
+vec3 shape_newton(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int d = int(P[0] + 0.5);
+  float relax = P[1];
+  vec2 win = vec2(q.x, q.y) - 0.5;
+  vec2 z = win*(4.0/P[2]) + (rnd.xy - 0.5)*0.003;
+  float K = P[3];
+  float it = K;
+  for(int j = 0; j < 80; j++){
+    if(float(j) >= K) break;
+    vec2 zp = newton_cpow(z, d - 1);
+    vec2 f = cmul(zp, z) - vec2(1.0, 0.0);
+    vec2 fp = float(d)*zp;
+    z = z - relax*cdiv(f, fp);
+    if(dot(f, f) < 1.0e-6){ it = float(j); break; }
+  }
+  float ang = atan(z.y, z.x);
+  float k = floor(mod(ang/TAU*float(d) + 0.5 + float(d), float(d)));
+  float rootFrac = k/float(d);
+  float shade = clamp(it/K, 0.0, 1.0);
+  vec3 p = vec3(win.x*2.4, P[4]*(1.0 - shade), win.y*2.4);
+  vec3 base = pal(rootFrac, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col = base * (0.3 + 1.3*(1.0 - shade)) * (0.55 + 0.7*P[5]);
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/26-bulb.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "bulb",
+  name: "The Mandelbulb",
+  roman: "XXVI",
+  accent: "#ff7a6a",
+  tex: "\\mathbf{z}\\mapsto \\mathbf{z}^{\\,n}+\\mathbf{c},\\quad (r,\\theta,\\phi)^n=(r^n,\\,n\\theta,\\,n\\phi)",
+  plain: "z ↦ zⁿ + c,   with (r,θ,φ)ⁿ = (rⁿ, nθ, nφ)  (spherical power)",
+  caption: "There is no true three-dimensional analogue of complex multiplication — but if you invent one by raising spherical coordinates to a power, twisting the angles and stretching the radius, the escape-time set of z⁸+c grows this bulbous, fractally-encrusted planet. Every point is a random probe of space: quick escapers are discarded, the boundary shell blazes, and the trapped interior glows dim. Raise the power to sprout more lobes, or switch to Julia mode and drift the constant c to melt the whole world into new forms.",
+  cam: { dist: 3.0, pitch: 0.22, tgtY: 0.0, rot: 0.05 },
+  gain: 0.6,
+  params: [
+    { label: "POWER n",    min: 2,  max: 12, step: 0.05, def: 8    },
+    { label: "ITERATIONS", min: 6,  max: 16, step: 1,    def: 10   },
+    { label: "SHELL CUT",  min: 0,  max: 0.9,step: 0.01, def: 0.45 },
+    { label: "MODE",       min: 0,  max: 1,  step: 1,    def: 0    },
+    { label: "JULIA X",    min: -1, max: 1,  step: 0.005,def: 0.2  },
+    { label: "JULIA Y",    min: -1, max: 1,  step: 0.005,def: 0.0  },
+    { label: "GLOW",       min: 0,  max: 1,  step: 0.01, def: 0.6  }
+  ],
+  glsl: `
+vec3 shape_bulb(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float power = P[0];
+  float ct = 1.0 - 2.0*q.x;
+  float st = sqrt(max(0.0, 1.0 - ct*ct));
+  float ph = TAU*q.y;
+  float rad = 1.3*pow(rnd.x, 0.33333);
+  vec3 pos = vec3(st*cos(ph), ct, st*sin(ph))*rad;
+  int mode = int(P[3] + 0.5);
+  vec3 z  = (mode == 0) ? vec3(0.0) : pos;
+  vec3 cc = (mode == 0) ? pos : vec3(P[4], P[5], 0.0);
+  float K = P[1];
+  float esc = -1.0;
+  for(int j = 0; j < 16; j++){
+    if(float(j) >= K) break;
+    float r = length(z);
+    if(r > 2.0){ esc = float(j); break; }
+    float theta = acos(clamp(z.y/max(r, 1.0e-6), -1.0, 1.0));
+    float phi = atan(z.z, z.x);
+    float rp = pow(r, power);
+    float nt = theta*power, np = phi*power;
+    z = rp*vec3(sin(nt)*cos(np), cos(nt), sin(nt)*sin(np)) + cc;
+  }
+  if(esc >= 0.0 && esc < P[2]*K){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  float glow = (esc < 0.0) ? 0.35 : 1.4;
+  float hue  = (esc < 0.0) ? rad*0.4 : esc/K;
+  col = pal(hue*0.6 + 0.1, vec3(0.5, 0.4, 0.35), vec3(0.5, 0.4, 0.4),
+            vec3(1.0, 0.9, 0.7), vec3(0.1, 0.3, 0.5)) * glow * (0.6 + 0.7*P[6]);
+  return pos*0.95;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/27-nonorient.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "nonorient",
+  name: "One-Sided Surfaces",
+  roman: "XXVII",
+  accent: "#8fe0c8",
+  tex: "\\text{Klein bottle},\\;\\text{Roman surface }(bc,ca,ab),\\;\\text{cross-cap}",
+  plain: "Klein bottle;   Roman surface (bc, ca, ab);   cross-cap",
+  caption: "Surfaces with only one side. A Klein bottle has no inside and no outside — its neck passes through its own wall to close up in a way that only truly fits in four dimensions, so in three it must self-intersect. The Roman and cross-cap surfaces are the projective plane forced into our space the same way. The creases where a surface passes through itself show up bright, because two sheets of points pile into the same place: the doubled density is the immersion's scar. CUTAWAY peels the skin back so you can follow the neck inside.",
+  cam: { dist: 3.2, pitch: 0.26, tgtY: 0.0, rot: 0.05 },
+  gain: 0.85,
+  params: [
+    { label: "SURFACE",   min: 0, max: 2,   step: 1,    def: 0   },
+    { label: "KLEIN R",   min: 2, max: 4,   step: 0.01, def: 3   },
+    { label: "CUTAWAY",   min: 0.3,max: 1,  step: 0.01, def: 1   },
+    { label: "THICKNESS", min: 0, max: 0.15,step: 0.002,def: 0.03 },
+    { label: "GLOW",      min: 0, max: 1,   step: 0.01, def: 0.55 }
+  ],
+  glsl: `
+vec3 shape_nonorient(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int s = int(P[0] + 0.5);
+  if(q.y > P[2]){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }  /* cutaway */
+  vec3 pos; float shade;
+  if(s == 0){                          /* figure-8 Klein bottle */
+    float u = TAU*q.x, v = TAU*q.y, uh = u*0.5;
+    float t = P[1] + cos(uh)*sin(v) - sin(uh)*sin(2.0*v);
+    pos = vec3(t*cos(u), t*sin(u), sin(uh)*sin(v) + cos(uh)*sin(2.0*v))*0.5;
+    shade = v/TAU;
+  } else if(s == 1){                   /* Roman (Steiner) surface */
+    float ct = 1.0 - 2.0*q.x, st = sqrt(max(0.0, 1.0 - ct*ct)), ph = TAU*q.y;
+    vec3 d = vec3(st*cos(ph), ct, st*sin(ph));
+    pos = vec3(d.x*d.y, d.y*d.z, d.z*d.x)*2.3;
+    shade = length(pos);
+  } else {                             /* cross-cap */
+    float ct = 1.0 - 2.0*q.x, st = sqrt(max(0.0, 1.0 - ct*ct)), ph = TAU*q.y;
+    vec3 d = vec3(st*cos(ph), ct, st*sin(ph));
+    pos = vec3(2.0*d.x*d.z, 2.0*d.y*d.z, d.x*d.x - d.y*d.y)*1.15;
+    shade = d.z*0.5 + 0.5;
+  }
+  pos += (rnd.xyz - 0.5)*P[3];
+  col = pal(shade*0.8 + 0.05, vec3(0.5, 0.45, 0.5), vec3(0.5, 0.45, 0.45),
+            vec3(1.0, 0.9, 0.8), vec3(0.1, 0.3, 0.5));
+  col *= 0.5 + 0.7*P[4];
+  return pos;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/28-penrose.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "penrose",
+  name: "Cut and Project",
+  roman: "XXVIII",
+  accent: "#e0c890",
+  tex: "\\Lambda=\\{\\pi_\\parallel(\\mathbf n):\\ \\mathbf n\\in\\mathbb Z^k,\\ \\pi_\\perp(\\mathbf n)\\in W\\}",
+  plain: "Λ = { π∥(n) : n ∈ ℤᵏ, π⊥(n) ∈ window }",
+  caption: "Order without repetition. Take a periodic lattice in a higher-dimensional space, tilt it, and project its points down into the plane — but keep only those whose shadow in the hidden directions lands inside a window. The survivors form a quasicrystal: fivefold, eightfold, any forbidden symmetry you like, patterned everywhere yet never once repeating. This is exactly rejection sampling, which is exactly what this atlas does with light, so the pattern condenses naturally. The hidden coordinate can be lifted into the third dimension to reveal the slice the plane was cut from.",
+  cam: { dist: 3.2, pitch: 0.32, tgtY: 0.0, rot: 0.04 },
+  gain: 0.75,
+  params: [
+    { label: "SYMMETRY",  min: 5, max: 12, step: 1,    def: 5   },
+    { label: "WINDOW",    min: 0.6,max: 3,  step: 0.02, def: 1.6 },
+    { label: "LATTICE M", min: 2, max: 5,   step: 1,    def: 3   },
+    { label: "SCALE",     min: 0.4,max: 1.6, step: 0.01,def: 1.0 },
+    { label: "3D LIFT",   min: 0, max: 1.2, step: 0.01, def: 0.0 },
+    { label: "GLOW",      min: 0, max: 1,   step: 0.01, def: 0.6 }
+  ],
+  glsl: `
+vec3 shape_penrose(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int fold = int(P[0] + 0.5); fold = max(4, min(12, fold));
+  float foldf = float(fold);
+  float win = P[1];
+  float M = P[2];
+  uint h = seed;
+  vec2 phys = vec2(0.0), intr = vec2(0.0);
+  for(int k = 0; k < 12; k++){
+    if(k >= fold) break;
+    h = hashu(h);
+    float nk = floor(u2f(h)*(2.0*M + 1.0)) - M;
+    float a = TAU*float(k)/foldf;
+    float b = 2.0*TAU*float(k)/foldf;      /* conjugate winding -> internal space */
+    phys += nk*vec2(cos(a), sin(a));
+    intr += nk*vec2(cos(b), sin(b));
+  }
+  if(dot(intr, intr) > win*win){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  vec3 p = vec3(phys*P[3]*0.16, length(intr)*P[4]);
+  col = pal(atan(intr.y, intr.x)/TAU + 0.5, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col *= 0.5 + 0.7*P[5];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/29-primes.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "primes",
+  name: "The Prime Spirals",
+  roman: "XXIX",
+  accent: "#ffd08a",
+  tex: "n\\mapsto(\\sqrt n,\\,2\\pi\\sqrt n),\\qquad a+bi\\ \\text{prime in }\\mathbb Z[i]",
+  plain: "Sacks: n ↦ (√n, 2π√n);   Gaussian primes a+bi in ℤ[i]",
+  caption: "Lay the whole numbers down a spiral and light only the primes. Ulam noticed the lamps fall on diagonals; on Sacks's square-root spiral those diagonals become sweeping curves, each the trace of a prime-rich quadratic like n²+n+41. The primes are not random — they are forbidden from being periodic and yet riddled with structure, and here that structure is simply visible. Switch to the Gaussian integers and the one-dimensional mystery opens into a fourfold constellation of primes in the complex lattice.",
+  cam: { dist: 3.4, pitch: 0.7, tgtY: 0.0, rot: 0.04 },
+  gain: 0.9,
+  params: [
+    { label: "MODE",       min: 0, max: 2,     step: 1,   def: 0     },
+    { label: "EXTENT N",   min: 1000,max: 40000,step: 100,def: 20000 },
+    { label: "SCALE",      min: 0.5,max: 1.8,  step: 0.01,def: 1.0   },
+    { label: "COLOR CYCLE",min: 0, max: 3,     step: 0.01,def: 1.0   },
+    { label: "GLOW",       min: 0, max: 1,     step: 0.01,def: 0.7   }
+  ],
+  glsl: `
+bool primes_isPrime(int n){
+  if(n < 2) return false;
+  if(n < 4) return true;
+  if((n - (n/2)*2) == 0) return false;
+  for(int d = 3; d < 320; d += 2){
+    if(d*d > n) break;
+    if(n - (n/d)*d == 0) return false;
+  }
+  return true;
+}
+vec3 shape_primes(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode = int(P[0] + 0.5);
+  float N = P[1];
+  if(mode < 2){
+    float n = floor(q.x*N) + 2.0;
+    if(!primes_isPrime(int(n))){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+    float r = sqrt(n);
+    float a = (mode == 0) ? TAU*sqrt(n) : n*2.39996323;   /* Sacks vs Vogel */
+    vec2 pos = r*vec2(cos(a), sin(a))*P[2]*0.06;
+    vec3 p = vec3(pos.x, 0.0, pos.y);
+    col = pal(fract(sqrt(n)*0.1*P[3]) + 0.1, vec3(0.5, 0.45, 0.4), vec3(0.5, 0.45, 0.45),
+              vec3(1.0, 0.95, 0.85), vec3(0.1, 0.3, 0.5));
+    col *= 0.5 + 0.7*P[4];
+    return p;
+  }
+  float Mx = sqrt(N);
+  int a = int(floor(q.x*2.0*Mx) - Mx);
+  int b = int(floor(q.y*2.0*Mx) - Mx);
+  int norm = a*a + b*b;
+  bool gp;
+  if(a == 0 || b == 0){
+    int mm = (a == 0) ? (b < 0 ? -b : b) : (a < 0 ? -a : a);
+    gp = primes_isPrime(mm) && ((mm - (mm/4)*4) == 3);
+  } else {
+    gp = primes_isPrime(norm);
+  }
+  if(!gp){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  vec3 p = vec3(float(a), 0.0, float(b))*P[2]*0.05;
+  col = pal(fract(float(norm)*0.01*P[3]) + 0.1, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col *= 0.5 + 0.7*P[4];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/30-collatz.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "collatz",
+  name: "Collatz Coral",
+  roman: "XXX",
+  accent: "#a8e08f",
+  tex: "n\\mapsto\\begin{cases}n/2 & n\\text{ even}\\\\ 3n+1 & n\\text{ odd}\\end{cases},\\qquad \\text{does every }n\\to1?",
+  plain: "n → n/2 (even) or 3n+1 (odd);   does every n reach 1?",
+  caption: "The simplest unsolved problem in mathematics. Halve it if even, triple-plus-one if odd, and every number ever tested comes tumbling down to 1 — but no one can prove it always does. Draw each number's descent as a path, bending one way at an even step and the other at an odd one, and align them all at their shared destination. The common tails braid together and the millions of trajectories grow into a single organic coral, the shape of a conjecture no proof has yet reached.",
+  cam: { dist: 3.2, pitch: 0.2, tgtY: 0.3, rot: 0.03 },
+  gain: 0.8,
+  params: [
+    { label: "MAX n",     min: 2000,max: 50000,step: 100, def: 15000 },
+    { label: "EVEN BEND", min: 0,   max: 0.5,  step: 0.005,def: 0.12 },
+    { label: "ODD BEND",  min: 0,   max: 0.6,  step: 0.005,def: 0.32 },
+    { label: "SEGMENT",   min: 0.02,max: 0.1,  step: 0.002,def: 0.05 },
+    { label: "SCALE",     min: 0.5, max: 1.6,  step: 0.01, def: 1.0  },
+    { label: "GLOW",      min: 0,   max: 1,    step: 0.01, def: 0.6  }
+  ],
+  glsl: `
+vec3 shape_collatz(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  uint n = 1u + uint(q.x*P[0]);
+  uint m = n; int len = 0; uint win = 0u;
+  for(int j = 0; j < 220; j++){
+    if(m == 1u) break;
+    uint par = m & 1u;
+    win = (win << 1) | par;                 /* newest parity in bit 0 */
+    if(par == 0u) m = m/2u; else m = 3u*m + 1u;
+    len++;
+  }
+  int keep = len < 32 ? len : 32;
+  if(keep <= 0){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  uint target = uint(u2f(hashu(seed))*float(keep));
+  vec2 pos = vec2(0.0); float dir = PI*0.5;
+  vec2 outpos = vec2(0.0); float depth = 0.0;
+  for(int j = 0; j < 32; j++){
+    if(j >= keep) break;
+    uint par = (win >> uint(j)) & 1u;        /* replay from nearest 1 outward */
+    dir += (par == 0u) ? P[1] : -P[2];
+    pos += P[3]*vec2(cos(dir), sin(dir));
+    if(uint(j) == target){ outpos = pos; depth = float(j); }
+  }
+  vec3 p = vec3(outpos.x, outpos.y, 0.0)*P[4];
+  col = pal(depth/float(keep)*0.7 + 0.05, vec3(0.4, 0.5, 0.4), vec3(0.4, 0.45, 0.4),
+            vec3(1.0, 0.95, 0.8), vec3(0.2, 0.35, 0.15));
+  col *= 0.5 + 0.7*P[5];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/31-stoch.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "stoch",
+  name: "The Bell Curve, Assembled",
+  roman: "XXXI",
+  accent: "#9fc0ff",
+  tex: "S_N=\\sum_{i=1}^N X_i\\ \\xrightarrow{\\ d\\ }\\ \\mathcal N(0,N),\\qquad \\text{unless }X_i\\ \\text{is heavy-tailed}",
+  plain: "Sₙ = ΣXᵢ → Normal(0, N)   — unless the steps are heavy-tailed",
+  caption: "Add enough small independent shoves and the total is Gaussian, no matter what the shoves looked like — the central limit theorem, the reason the bell curve is everywhere. Watch it build: each point is a partial sum after some number of coin flips, stacked by row, and the density at the bottom is the binomial collapsing onto the Normal. Bias the coin to lean it; switch to a Cauchy step and the theorem fails outright — the tails never tame and no bell forms. In walk mode the same increments trace Brownian and Lévy paths in space.",
+  cam: { dist: 3.2, pitch: 0.3, tgtY: 0.0, rot: 0.03 },
+  gain: 0.8,
+  params: [
+    { label: "MODE",        min: 0, max: 1,   step: 1,    def: 0   },
+    { label: "ROWS / STEPS",min: 10,max: 200, step: 1,    def: 120 },
+    { label: "BIAS / α",    min: 0, max: 1,   step: 0.01, def: 0.5 },
+    { label: "LAW",         min: 0, max: 2,   step: 1,    def: 0   },
+    { label: "SCALE",       min: 0.4,max: 1.8,step: 0.01, def: 1.0 },
+    { label: "GLOW",        min: 0, max: 1,   step: 0.01, def: 0.6 }
+  ],
+  glsl: `
+vec3 shape_stoch(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode = int(P[0] + 0.5);
+  int law = int(P[3] + 0.5);
+  if(mode == 0){                        /* Galton pyramid */
+    int rows = int(P[1]);
+    int rr = int(q.y*float(rows)) + 1;
+    uint h = seed; float x = 0.0;
+    for(int j = 0; j < 200; j++){
+      if(j >= rr) break;
+      h = hashu(h); float u = u2f(h);
+      float step;
+      if(law == 0) step = (u < P[2]) ? 1.0 : -1.0;
+      else if(law == 1) step = (u - 0.5)*3.4;
+      else step = tan(PI*(u - 0.5))*0.5;          /* Cauchy: breaks CLT */
+      x += step;
+    }
+    vec3 p = vec3(x*P[4]*0.12, (0.5 - q.y)*2.2, 0.0);
+    col = pal(q.y*0.6 + 0.1, vec3(0.5, 0.45, 0.5), vec3(0.5, 0.45, 0.45),
+              vec3(1.0, 0.95, 0.9), vec3(0.1, 0.25, 0.5));
+    col *= 0.5 + 0.7*P[5];
+    return p;
+  }
+  int steps = int(P[1]);
+  uint h = seed; vec3 pos = vec3(0.0);
+  int target = int(u2f(hashu(seed))*float(steps));
+  vec3 endp = vec3(0.0); float td = 0.0;
+  for(int j = 0; j < 200; j++){
+    if(j >= steps) break;
+    h = hashu(h); float u1 = u2f(h);
+    h = hashu(h); float u2 = u2f(h);
+    h = hashu(h); float u3 = u2f(h);
+    vec3 inc;
+    if(law == 0){                       /* Brownian: Gaussian increments */
+      float g = sqrt(-2.0*log(max(1.0e-6, u1)));
+      inc = vec3(g*cos(TAU*u2), g*sin(TAU*u2), sqrt(-2.0*log(max(1.0e-6, u3)))*cos(TAU*u1))*0.1;
+    } else {                            /* Lévy: heavy-tailed jumps */
+      float r = pow(max(1.0e-6, u1), -1.0/max(0.5, P[2] + 0.5))*0.02;
+      float ct = 1.0 - 2.0*u2, st = sqrt(max(0.0, 1.0 - ct*ct)), ph = TAU*u3;
+      inc = r*vec3(st*cos(ph), ct, st*sin(ph));
+    }
+    pos += inc;
+    if(j == target){ endp = pos; td = float(j); }
+  }
+  vec3 p = endp*P[4];
+  col = pal(td/float(steps)*0.7 + 0.05, vec3(0.45, 0.4, 0.55), vec3(0.4, 0.4, 0.45),
+            vec3(1.0, 0.9, 0.85), vec3(0.5, 0.35, 0.15));
+  col *= 0.5 + 0.7*P[5];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/32-curves.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "curves",
+  name: "Roulettes & Knots",
+  roman: "XXXII",
+  accent: "#c8a0ff",
+  tex: "\\text{harmonograph},\\ \\text{hypotrochoid},\\ \\text{Lissajous},\\ (p,q)\\text{-torus knot}",
+  plain: "harmonograph · hypotrochoid · Lissajous · (p,q) torus knot",
+  caption: "A closing gallery of curves that draw themselves. A harmonograph hangs a pen from decaying pendulums and lets their beats interfere; a spirograph rolls one circle inside another; a Lissajous figure listens to two tones at once; a torus knot winds p times one way and q the other and cannot be untied. Each is a single point swept by a parameter, given a little thickness so it reads as a filament in space, and brightness follows the pace — bright where the curve lingers, faint where it hurries. Every knob is a frequency; almost any setting hides something worth keeping.",
+  cam: { dist: 3.2, pitch: 0.25, tgtY: 0.0, rot: 0.06 },
+  gain: 0.85,
+  params: [
+    { label: "MODE",     min: 0, max: 3,   step: 1,    def: 3   },
+    { label: "FREQ A / r",min: 1,max: 5,   step: 0.01, def: 3   },
+    { label: "FREQ B / p",min: 1,max: 5,   step: 0.01, def: 2   },
+    { label: "FREQ C / q",min: 1,max: 5,   step: 0.01, def: 3   },
+    { label: "TUBE",     min: 0, max: 0.1, step: 0.002,def: 0.03 },
+    { label: "SCALE",    min: 0.5,max: 1.6,step: 0.01, def: 1.0 },
+    { label: "GLOW",     min: 0, max: 1,   step: 0.01, def: 0.6 }
+  ],
+  glsl: `
+vec3 shape_curves(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode = int(P[0] + 0.5);
+  vec3 c;
+  if(mode == 0){                        /* 3D damped harmonograph */
+    float d = P[1]*0.02;
+    float t = TAU*q.x*6.0;
+    c = vec3(sin(P[1]*t)*exp(-d*t), sin(P[2]*t + 1.0)*exp(-d*t), cos(P[3]*t + 2.0)*exp(-d*t));
+  } else if(mode == 1){                 /* hypotrochoid (spirograph) */
+    float R = 1.0, r = P[1]*0.15 + 0.15, dd = P[2]*0.4;
+    float t = TAU*q.x*12.0;
+    float k = (R - r)/r;
+    c = vec3((R - r)*cos(t) + dd*cos(k*t), (R - r)*sin(t) - dd*sin(k*t), 0.0)*0.9;
+  } else if(mode == 2){                 /* 3D Lissajous */
+    float t = TAU*q.x;
+    c = vec3(sin(P[1]*t), sin(P[2]*t + PI*0.5), sin(P[3]*t + 1.0));
+  } else {                              /* (p,q) torus knot */
+    float t = TAU*q.x;
+    float pp = P[2], qq = P[3], R = 1.0, rr = 0.42;
+    c = vec3((R + rr*cos(qq*t))*cos(pp*t), rr*sin(qq*t), (R + rr*cos(qq*t))*sin(pp*t))*0.9;
+  }
+  c += (rnd.xyz - 0.5)*P[4];
+  vec3 p = c*P[5];
+  col = pal(q.x*0.8 + 0.05, vec3(0.5, 0.45, 0.5), vec3(0.5, 0.45, 0.45),
+            vec3(1.0, 0.9, 0.85), vec3(0.1, 0.3, 0.5));
+  col *= 0.5 + 0.7*P[6];
+  return p;
 }`
 });
 
