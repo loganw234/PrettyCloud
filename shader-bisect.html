@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>shader compile bisect</title></head>
+<body>
+<canvas id="gl" width="64" height="64"></canvas>
+<script src="js/core/registry.js"></script>
+<script src="js/core/glsl-lib.js"></script>
+<script src="js/plates/01-hopf.js"></script>
+<script src="js/plates/02-harmonics.js"></script>
+<script src="js/plates/03-logz.js"></script>
+<script src="js/plates/04-dejong.js"></script>
+<script src="js/plates/05-waves.js"></script>
+<script src="js/plates/06-mandelbrot.js"></script>
+<script src="js/plates/07-chaosgame.js"></script>
+<script src="js/plates/08-chladni.js"></script>
+<script src="js/plates/09-gibbs.js"></script>
+<script src="js/plates/10-modular.js"></script>
+<script src="js/plates/11-zeta.js"></script>
+<script src="js/plates/12-qjulia.js"></script>
+<script src="js/plates/13-buddha.js"></script>
+<script src="js/plates/14-flows.js"></script>
+<script src="js/plates/15-orbital.js"></script>
+<script src="js/plates/16-tpms.js"></script>
+<script src="js/plates/17-kleinian.js"></script>
+<script src="js/plates/18-caustic.js"></script>
+<script src="js/plates/19-bifurc.js"></script>
+<script src="js/plates/20-stdmap.js"></script>
+<script src="js/plates/21-domain.js"></script>
+<script src="js/plates/22-rmt.js"></script>
+<script src="js/plates/23-invjulia.js"></script>
+<script src="js/plates/24-polytope.js"></script>
+<script src="js/plates/25-newton.js"></script>
+<script src="js/plates/26-bulb.js"></script>
+<script src="js/plates/27-nonorient.js"></script>
+<script src="js/plates/28-penrose.js"></script>
+<script src="js/plates/29-primes.js"></script>
+<script src="js/plates/30-collatz.js"></script>
+<script src="js/plates/31-stoch.js"></script>
+<script src="js/plates/32-curves.js"></script>
+<script src="js/plates/33-billiards.js"></script>
+<script src="js/plates/34-arnold.js"></script>
+<script src="js/plates/35-lyap.js"></script>
+<script src="js/plates/36-threebody.js"></script>
+<script src="js/plates/37-relativity.js"></script>
+<script src="js/plates/38-dipole.js"></script>
+<script src="js/plates/39-rainbow.js"></script>
+<script src="js/plates/40-nodal.js"></script>
+<script src="js/plates/41-wpath.js"></script>
+<script src="js/plates/42-cursum.js"></script>
+<script src="js/plates/43-ford.js"></script>
+<script src="js/plates/44-e8.js"></script>
+<script src="js/plates/45-elliptic.js"></script>
+<script src="js/plates/46-hilbert.js"></script>
+<script src="js/plates/47-hyper.js"></script>
+<script src="js/plates/48-swallow.js"></script>
+<script src="js/plates/49-diffract.js"></script>
+<script src="js/plates/50-wavecat.js"></script>
+<script src="js/plates/51-halo.js"></script>
+<script src="js/plates/52-conoscope.js"></script>
+<script src="js/plates/53-vortex.js"></script>
+<script src="js/plates/54-mirage.js"></script>
+<script src="js/plates/55-allpaths.js"></script>
+<script src="js/plates/56-starfield.js"></script>
+<script>
+/* Compile a vertex shader containing only the selected plates (by index),
+   with a dispatcher over just those. Times compile+link via ubershader-style
+   forced completion (getProgramParameter blocks until FXC finishes). */
+window.__results = [];
+window.__done = false;
+
+function buildShaderFor(indices) {
+  const plates = indices.map(i => Atlas.plates[i]);
+  const shapes = plates.map(p => p.glsl).join("\n");
+  const dispatch = plates
+    .map((p, k) => `  if(m == ${k}) return shape_${p.id}(q, rnd, seed, P, col);`)
+    .join("\n");
+  return (
+    Atlas.GLSL.vertHeader +
+    "\n" + shapes + "\n" +
+    "vec3 shape(int m, vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){\n" +
+    dispatch + "\n" +
+    "  col = vec3(0.0); return vec3(0.0);\n}\n" +
+    Atlas.GLSL.vertMain
+  );
+}
+
+function timeCompile(gl, vsSrc) {
+  const t0 = performance.now();
+  const vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, vsSrc);
+  gl.compileShader(vs);
+  if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+    return { ok: false, ms: performance.now() - t0, log: gl.getShaderInfoLog(vs).slice(0, 500) };
+  }
+  const fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, Atlas.GLSL.pointFrag);
+  gl.compileShader(fs);
+  const p = gl.createProgram();
+  gl.attachShader(p, vs);
+  gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  const linked = gl.getProgramParameter(p, gl.LINK_STATUS); /* forces the wait */
+  const ms = performance.now() - t0;
+  gl.deleteProgram(p); gl.deleteShader(vs); gl.deleteShader(fs);
+  return { ok: !!linked, ms };
+}
+
+async function run() {
+  const gl = document.getElementById("gl").getContext("webgl2");
+  if (!gl) { window.__results.push({ name: "NO WEBGL2", ok: false }); window.__done = true; return; }
+  const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+  window.__renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : "unknown";
+
+  const qs = new URLSearchParams(location.search);
+  const mode = qs.get("mode") || "singles";
+  const jobs = [];
+  if (mode === "singles") {
+    /* each new plate alone (plus hopf so the dispatcher is non-trivial) */
+    for (let i = 48; i < 56; i++) jobs.push({ name: Atlas.plates[i].id, idx: [0, i] });
+  } else if (mode === "base48") {
+    jobs.push({ name: "base48", idx: Array.from({ length: 48 }, (_, i) => i) });
+  } else if (mode === "full56") {
+    jobs.push({ name: "full56", idx: Array.from({ length: 56 }, (_, i) => i) });
+  } else if (mode === "growth") {
+    for (const n of [8, 16, 24, 32, 40, 48, 52, 54, 56])
+      jobs.push({ name: "1.." + n, idx: Array.from({ length: n }, (_, i) => i) });
+  } else if (mode.startsWith("prefix")) {
+    const n = parseInt(mode.slice(6), 10);
+    jobs.push({ name: "1.." + n, idx: Array.from({ length: n }, (_, i) => i) });
+  }
+  for (const j of jobs) {
+    const r = timeCompile(gl, buildShaderFor(j.idx));
+    window.__results.push({ name: j.name, ok: r.ok, ms: Math.round(r.ms), log: r.log });
+    await new Promise(res => setTimeout(res, 50));
+  }
+  window.__done = true;
+}
+run();
+</script>
+</body>
+</html>

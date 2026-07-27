@@ -22,10 +22,16 @@ globalThis.Atlas = {
 
   GLSL: {}, /* filled by glsl-lib.js */
 
-  buildVertexShader() {
-    const shapes = this.plates.map(p => p.glsl).join("\n");
-    const dispatch = this.plates
-      .map((p, i) => `  if(m == ${i}) return shape_${p.id}(q, rnd, seed, P, col);`)
+  /* Build a vertex shader containing ONLY the given plate indices.
+     One shader per active morph pair, not one ubershader: D3D's HLSL
+     compiler (stock Chrome on Windows) grows super-quadratically in
+     total program size and aborts entirely past ~50 plates. A 2-plate
+     program compiles in well under a second and is cached. */
+  buildVertexShaderFor(indices) {
+    const uniq = [...new Set(indices)];
+    const shapes = uniq.map(i => this.plates[i].glsl).join("\n");
+    const dispatch = uniq
+      .map(i => `  if(m == ${i}) return shape_${this.plates[i].id}(q, rnd, seed, P, col);`)
       .join("\n");
     return (
       this.GLSL.vertHeader +

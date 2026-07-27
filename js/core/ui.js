@@ -102,7 +102,13 @@ Atlas.UI = (function () {
     const defs = [
       { key: "densExp", label: "DENSITY", min: 20, max: 27, step: 1, def: 23,
         fmt: v => "2^" + v,
-        set: v => { S.N = 1 << v; $("densWarn").classList.toggle("show", v >= 26); } },
+        set: v => {
+          /* ceiling for the adaptive governor in main.js; it climbs to
+             this while the frame rate holds and retreats when it sags */
+          S.maxExp = v;
+          if (S.autoExp > v) S.autoExp = v;
+          $("densWarn").classList.toggle("show", v >= 26);
+        } },
       { key: "ptSize",  label: "POINT SIZE", min: 0.5, max: 4,   step: 0.05, def: 1.15,
         set: v => S.ptSize = v },
       { key: "expoLog", label: "EXPOSURE",   min: -1,  max: 1.3, step: 0.01, def: 0,

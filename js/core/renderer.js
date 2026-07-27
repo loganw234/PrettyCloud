@@ -7,15 +7,33 @@
                     vignette, dither → screen
    Brightness therefore remains a density estimate of the measure;
    persistence just extends the estimate through time.
+
+   Point programs are compiled PER MORPH PAIR, not as one ubershader:
+   Windows Chrome routes GLSL through D3D's HLSL compiler, whose cost
+   grows super-quadratically with program size — 48 plates took 92 s
+   and 56 hit ANGLE's ~100 s watchdog and killed the context. A
+   2-plate program links in well under a second, is compiled
+   asynchronously (KHR_parallel_shader_compile) while the previous
+   plate keeps rendering, and is cached LRU alongside Chrome's own
+   on-disk shader cache.
    ═══════════════════════════════════════════════════════════════════ */
 Atlas.Renderer = (function () {
   let gl, canvas, hasFloat = false;
-  let progPts, progTm, progFade;
-  let U = {}, Utm = {}, Ufade = {};
+  let progTm, progFade;
+  let Utm = {}, Ufade = {};
   let vao;
   let accum = [null, null], accumTex = [null, null], cur = 0;
   let fbW = 0, fbH = 0;
   let renderScale = 1;
+  let parallelExt = null;
+
+  /* pair-program cache: [{ key, set, prog, U, ready, cbs, stamp }] */
+  let cache = [];
+  let stamp = 0;
+  const CACHE_MAX = 8;
+
+  const PT_UNIFORMS = ["uVP","uT","uMorph","uModeA","uModeB","uPt",
+                       "uIntensity","uGainA","uGainB"];
 
   function compile(type, src) {
     const s = gl.createShader(type);
@@ -33,6 +51,80 @@ Atlas.Renderer = (function () {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS))
       throw new Error(gl.getProgramInfoLog(p));
     return p;
+  }
+
+  function keyFor(indices) {
+    return [...new Set(indices)].sort((a, b) => a - b).join(":");
+  }
+
+  function fetchUniforms(prog) {
+    const U = {};
+    for (const n of PT_UNIFORMS) U[n] = gl.getUniformLocation(prog, n);
+    U.uPA = gl.getUniformLocation(prog, "uPA[0]");
+    U.uPB = gl.getUniformLocation(prog, "uPB[0]");
+    return U;
+  }
+
+  function finishEntry(e) {
+    if (!gl.getProgramParameter(e.prog, gl.LINK_STATUS)) {
+      /* a plate that fails to compile leaves the previous program active;
+         report on the console rather than killing the whole atlas */
+      console.error("atlas: pair " + e.key + " failed to link:",
+                    gl.getProgramInfoLog(e.prog));
+      e.failed = true;
+    } else {
+      e.U = fetchUniforms(e.prog);
+    }
+    e.ready = true;
+    const cbs = e.cbs; e.cbs = [];
+    for (const cb of cbs) cb(!e.failed);
+  }
+
+  /* create (or reuse) the program for a set of plate indices */
+  function requestEntry(indices) {
+    const key = keyFor(indices);
+    let e = cache.find(c => c.key === key);
+    if (e) { e.stamp = ++stamp; return e; }
+    const uniq = [...new Set(indices)].sort((a, b) => a - b);
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, Atlas.buildVertexShaderFor(uniq)));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, Atlas.GLSL.pointFrag));
+    gl.linkProgram(prog);
+    e = { key, set: uniq, prog, U: null, ready: false, failed: false,
+          cbs: [], stamp: ++stamp };
+    cache.push(e);
+    /* evict the stalest ready entry beyond the cap */
+    if (cache.length > CACHE_MAX) {
+      const ready = cache.filter(c => c.ready).sort((a, b) => a.stamp - b.stamp);
+      if (ready.length) {
+        const victim = ready[0];
+        cache = cache.filter(c => c !== victim);
+        gl.deleteProgram(victim.prog);
+      }
+    }
+    if (!parallelExt) finishEntry(e);         /* synchronous fallback */
+    return e;
+  }
+
+  /* advance pending async compiles; called once per frame */
+  function pollPending() {
+    if (!parallelExt) return;
+    for (const e of cache) {
+      if (e.ready) continue;
+      if (gl.getProgramParameter(e.prog, parallelExt.COMPLETION_STATUS_KHR))
+        finishEntry(e);
+    }
+  }
+
+  function entryCovering(a, b) {
+    let best = null;
+    for (const e of cache) {
+      if (!e.ready || e.failed) continue;
+      if (e.set.includes(a) && e.set.includes(b)) {
+        if (!best || e.stamp > best.stamp) best = e;
+      }
+    }
+    return best;
   }
 
   function makeTargets(w, h) {
@@ -85,21 +177,21 @@ Atlas.Renderer = (function () {
       });
       if (!gl) return false;
       hasFloat = !!gl.getExtension("EXT_color_buffer_float");
+      parallelExt = gl.getExtension("KHR_parallel_shader_compile");
       renderScale = Math.min(window.devicePixelRatio || 1, 1.5);
 
-      progPts  = program(Atlas.buildVertexShader(), Atlas.GLSL.pointFrag);
       progTm   = program(Atlas.GLSL.quadVert, Atlas.GLSL.tonemapFrag);
       progFade = program(Atlas.GLSL.quadVert, Atlas.GLSL.fadeFrag);
 
-      for (const n of ["uVP","uT","uMorph","uModeA","uModeB","uPt",
-                       "uIntensity","uGainA","uGainB"])
-        U[n] = gl.getUniformLocation(progPts, n);
-      U.uPA = gl.getUniformLocation(progPts, "uPA[0]");
-      U.uPB = gl.getUniformLocation(progPts, "uPB[0]");
       for (const n of ["uTex","uExp","uGamma","uSat","uHueM"])
         Utm[n] = gl.getUniformLocation(progTm, n);
       Ufade.uTex = gl.getUniformLocation(progFade, "uTex");
       Ufade.uPersist = gl.getUniformLocation(progFade, "uPersist");
+
+      /* the first plate compiles synchronously so the atlas has a first
+         frame immediately — a 1-plate program is fast on every backend */
+      const first = requestEntry([0]);
+      if (!first.ready) finishEntry(first);
 
       vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
@@ -118,6 +210,14 @@ Atlas.Renderer = (function () {
     hasFloat() { return hasFloat; },
     size() { ensureSize(); return { w: canvas.width, h: canvas.height }; },
 
+    /* Request the program covering the given plate indices. onReady(ok)
+       fires immediately if cached, else when the async link completes. */
+    prepare(indices, onReady) {
+      const e = requestEntry(indices);
+      if (e.ready) { onReady(!e.failed); return; }
+      e.cbs.push(onReady);
+    },
+
     gpuName() {
       try {
         const dbg = gl.getExtension("WEBGL_debug_renderer_info");
@@ -133,6 +233,9 @@ Atlas.Renderer = (function () {
              gainA, gainB, PA, PB, persist, exposure, gamma, hue, sat */
     render(o) {
       ensureSize();
+      pollPending();
+      const entry = entryCovering(o.modeA, o.modeB);
+      if (!entry) return false;                /* pair still compiling */
       const W = canvas.width, H = canvas.height;
       cur ^= 1;
       const prev = 1 - cur;
@@ -154,9 +257,10 @@ Atlas.Renderer = (function () {
       }
 
       /* pass 2 — the measure */
+      const U = entry.U;
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
-      gl.useProgram(progPts);
+      gl.useProgram(entry.prog);
       gl.bindVertexArray(vao);
       gl.uniformMatrix4fv(U.uVP, false, o.vp);
       gl.uniform1f(U.uT, o.simT);
@@ -184,6 +288,7 @@ Atlas.Renderer = (function () {
       gl.uniform1f(Utm.uSat, o.sat);
       gl.uniformMatrix3fv(Utm.uHueM, true, hueMatrix(o.hue));
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      return true;
     },
 
     exportPNG(name) {
