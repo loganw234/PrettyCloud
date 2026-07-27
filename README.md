@@ -11,18 +11,25 @@ or use the prebuilt single file at `build/atlas-bundled.html`.
 
 ## The plates
 
-Thirty-two in all, spanning topology, chaos, number theory, quantum mechanics and optics. Every
-parameter on the right is live, and `R` randomizes the current plate's levers.
+Forty-eight in all, spanning topology, chaos, number theory, quantum mechanics, optics,
+general relativity, ergodic theory, Lie theory, hyperbolic geometry and catastrophe theory.
+Every parameter on the right is live, and `R` randomizes the current plate's levers.
 
-![Contact sheet of all 32 plates, each labelled with its roman numeral and title](docs/screenshots/atlas.png)
+![Contact sheet of all 48 plates, each labelled with its roman numeral and title](docs/screenshots/atlas.png)
 
-Three of them full size:
+Six of them full size:
 
 ![Plate I — the Hopf Fibration: linked fiber circles over S², hue naming the base point](docs/screenshots/hopf-fibration.png)
 
 ![Plate XVI — Minimal Surfaces: a gyroid, sampled through a block of unit cells and Newton-projected onto the level set](docs/screenshots/minimal-surfaces.png)
 
 ![Plate XXVII — One-Sided Surfaces: a Klein bottle, with the doubled density along its self-intersection showing as a bright crease](docs/screenshots/one-sided-surfaces.png)
+
+![Plate XXXVII — The Photon Sphere: Schwarzschild null geodesics; near-critical photons wind many times around r = 3M, so the photon ring ignites purely because brightness measures winding angle](docs/screenshots/photon-sphere.png)
+
+![Plate XXXVIII — How Light Leaves an Antenna: E-field lines of an oscillating dipole from the exact flux function, near-field loops pinching off and sailing outward as radiation](docs/screenshots/dipole-field-lines.png)
+
+![Plate XLIV — The Shape of E8: all 240 roots in the Coxeter plane, eight concentric rings of thirty, with the 60-degree edge web sampled root by root](docs/screenshots/e8-coxeter-plane.png)
 
 ## Structure
 
@@ -45,14 +52,14 @@ this way the page works straight off the disk.
 
 ## Adding a plate
 
-Create `js/plates/33-yourthing.js` and add one `<script>` tag to
+Create `js/plates/49-yourthing.js` and add one `<script>` tag to
 `index.html` (before the core engine scripts). That's the whole process.
 
 ```js
 Atlas.registerPlate({
   id: "yourthing",            // unique; becomes shape_yourthing in GLSL
   name: "Your Thing",
-  roman: "XXXIII",
+  roman: "XLIX",
   accent: "#88ccff",          // UI accent while this plate is active
   tex: "e^{i\\pi}+1=0",      // KaTeX for the placard
   plain: "e^ipi + 1 = 0",     // fallback if KaTeX fails to load
