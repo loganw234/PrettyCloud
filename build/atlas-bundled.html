@@ -2206,6 +2206,1850 @@ vec3 shape_curves(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
 });
 
 </script>
+<script>
+/* ── js/plates/33-billiards.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "billiards",
+  name: "Billiards, Tamed and Wild",
+  roman: "XXXIII",
+  accent: "#8fe0d0",
+  tex: "v' = v - 2(v\\cdot n)\\,n,\\qquad \\frac{1}{T}\\int_0^{T} f(\\varphi_t x)\\,dt \\;\\longrightarrow\\; \\frac{1}{|Q|}\\int_Q f\\,dA",
+  plain: "v′ = v − 2(v·n)n,   (1/T)∫₀ᵀ f(φₜx)dt → (1/|Q|)∫_Q f dA",
+  caption: "A free particle bounces specularly inside a table; TABLE chooses its universe. Circle and ellipse are integrable: a conserved quantity pins every chord tangent to a caustic — an inner ring, or a confocal ellipse or hyperbola according as the chord misses or crosses the segment between the foci — so no orbit ever fills the table, and the caustics ignite as density piles onto them. The Bunimovich stadium and Sinai's square-with-disk are proven ergodic (Bunimovich 1974–79, Sinai 1970): a generic orbit fills the table, and brightness — literally the orbit family's time average — goes flat. Colour names the conserved quantity, or the launch angle; push AIM toward tangency for whispering-gallery orbits.",
+  cam: { dist: 3.0, pitch: 0.9, tgtY: 0.0, rot: 0.03 },
+  gain: 0.85,
+  params: [
+    { label: "TABLE",        min: 0, max: 3,    step: 1,     def: 0    },
+    { label: "BOUNCES",      min: 1, max: 40,   step: 1,     def: 26   },
+    { label: "ECCENTRICITY", min: 0, max: 1,    step: 0.01,  def: 0.55 },
+    { label: "AIM",          min: 0, max: 1,    step: 0.01,  def: 0.32 },
+    { label: "SPREAD",       min: 0, max: 1,    step: 0.01,  def: 0.18 },
+    { label: "LIFT",         min: 0, max: 0.05, step: 0.001, def: 0    },
+    { label: "GLOW",         min: 0, max: 1,    step: 0.01,  def: 0.5  }
+  ],
+  glsl: `
+/* table geometry, shared by start / intersection / hue so they agree */
+vec2 billiards_ab(float ecc){ return vec2(1.25, mix(1.18, 0.45, ecc)); }     /* ellipse a, b   */
+vec2 billiards_stad(float ecc){ return vec2(0.62, mix(0.06, 0.88, ecc)); }   /* stadium r, L   */
+vec2 billiards_sinai(float ecc){ return vec2(1.12, mix(0.15, 0.95, ecc)); }  /* sinai s, rho   */
+
+/* smallest positive ray-boundary intersection; nrm = inward normal at hit.
+   Returns -1.0 if nothing was hit (degenerate ray -> caller hides point). */
+float billiards_hit(int tb, float ecc, vec2 ro, vec2 rd, out vec2 nrm){
+  nrm = vec2(0.0, 1.0);
+  float EPS = 1.0e-4;
+  if(tb == 0){                               /* circle: far root of the quadratic */
+    float R = 1.15;
+    float b = dot(ro, rd);
+    float disc = max(0.0, b*b - dot(ro, ro) + R*R);
+    float t = -b + sqrt(disc);
+    vec2 h = ro + rd*t;
+    nrm = -h/R;
+    return t;
+  }
+  if(tb == 1){                               /* ellipse: scale to unit circle */
+    vec2 ab = billiards_ab(ecc);
+    vec2 os = ro/ab;
+    vec2 ds = rd/ab;
+    float A = dot(ds, ds) + 1.0e-12;
+    float B = dot(os, ds);
+    float C = dot(os, os) - 1.0;
+    float disc = max(0.0, B*B - A*C);
+    float t = (-B + sqrt(disc))/A;
+    vec2 h = ro + rd*t;
+    nrm = -normalize(h/(ab*ab) + vec2(1.0e-9));  /* -grad(x2/a2+y2/b2) */
+    return t;
+  }
+  if(tb == 2){                               /* Bunimovich stadium: 2 walls + 2 caps */
+    vec2 rl = billiards_stad(ecc);
+    float r = rl.x, L = rl.y;
+    float best = 1.0e9;
+    /* walls take any t > 0: self-hits are impossible (reflection flips the
+       direction component toward the wall, and each test is direction-gated),
+       and an EPS floor would reject genuine junction hits and leak the ray. */
+    if(rd.y > 1.0e-7){
+      float t = (r - ro.y)/rd.y;
+      if(t > 0.0 && t < best && abs(ro.x + rd.x*t) <= L + 1.0e-6){ best = t; nrm = vec2(0.0, -1.0); }
+    }
+    if(rd.y < -1.0e-7){
+      float t = (-r - ro.y)/rd.y;
+      if(t > 0.0 && t < best && abs(ro.x + rd.x*t) <= L + 1.0e-6){ best = t; nrm = vec2(0.0, 1.0); }
+    }
+    for(int side = 0; side < 2; side++){
+      float cx = side == 0 ? L : -L;
+      vec2 oc = ro - vec2(cx, 0.0);
+      float B = dot(oc, rd);
+      float C = dot(oc, oc) - r*r;
+      float disc = B*B - C;
+      if(disc > 0.0){
+        float sq = sqrt(disc);
+        float t1 = -B - sq;
+        float t2 = -B + sq;
+        float hx1 = ro.x + rd.x*t1;
+        float hx2 = ro.x + rd.x*t2;
+        /* t > 0, not EPS: after a cap bounce the nudged origin sits strictly
+           inside the cap circle, so t1 < 0 and t2 is a genuine next hit */
+        bool v1 = t1 > 0.0 && (side == 0 ? hx1 >= L - 1.0e-6 : hx1 <= -L + 1.0e-6);
+        bool v2 = t2 > 0.0 && (side == 0 ? hx2 >= L - 1.0e-6 : hx2 <= -L + 1.0e-6);
+        float t = v1 ? t1 : (v2 ? t2 : -1.0);
+        if(t > 0.0 && t < best){
+          best = t;
+          vec2 h = ro + rd*t;
+          nrm = (vec2(cx, 0.0) - h)/r;       /* cap is concave inward */
+        }
+      }
+    }
+    return best < 1.0e8 ? best : -1.0;
+  }
+  /* tb == 3: Sinai table, square with a dispersing disk in the middle */
+  vec2 sr = billiards_sinai(ecc);
+  float s = sr.x, rho = sr.y;
+  float best = 1.0e9;
+  /* t > 0, not EPS: a corner hit needs the second wall within ~1e-5, and the
+     direction gate already forbids re-hitting the wall just bounced from */
+  if(rd.x >  1.0e-7){ float t = ( s - ro.x)/rd.x; if(t > 0.0 && t < best){ best = t; nrm = vec2(-1.0, 0.0); } }
+  if(rd.x < -1.0e-7){ float t = (-s - ro.x)/rd.x; if(t > 0.0 && t < best){ best = t; nrm = vec2( 1.0, 0.0); } }
+  if(rd.y >  1.0e-7){ float t = ( s - ro.y)/rd.y; if(t > 0.0 && t < best){ best = t; nrm = vec2(0.0, -1.0); } }
+  if(rd.y < -1.0e-7){ float t = (-s - ro.y)/rd.y; if(t > 0.0 && t < best){ best = t; nrm = vec2(0.0,  1.0); } }
+  float B = dot(ro, rd);
+  float C = dot(ro, ro) - rho*rho;
+  float disc = B*B - C;
+  if(disc > 0.0){                            /* disk seen from outside: near root */
+    float t1 = -B - sqrt(disc);
+    if(t1 > EPS && t1 < best){ best = t1; nrm = (ro + rd*t1)/rho; }
+  }
+  return best < 1.0e8 ? best : -1.0;
+}
+
+/* boundary point at perimeter fraction u, with its inward normal */
+vec2 billiards_start(int tb, float ecc, float u, out vec2 nrm){
+  if(tb == 0){
+    float a = u*TAU;
+    vec2 c = vec2(cos(a), sin(a));
+    nrm = -c;
+    return 1.15*c;
+  }
+  if(tb == 1){
+    vec2 ab = billiards_ab(ecc);
+    float ph = u*TAU;
+    vec2 h = vec2(ab.x*cos(ph), ab.y*sin(ph));
+    nrm = -normalize(h/(ab*ab) + vec2(1.0e-9));
+    return h;
+  }
+  if(tb == 2){
+    vec2 rl = billiards_stad(ecc);
+    float r = rl.x, L = rl.y;
+    float per = 4.0*L + TAU*r;
+    float sarc = u*per;
+    if(sarc < 2.0*L){ nrm = vec2(0.0, -1.0); return vec2(sarc - L,  r); }
+    sarc -= 2.0*L;
+    if(sarc < 2.0*L){ nrm = vec2(0.0,  1.0); return vec2(L - sarc, -r); }
+    sarc -= 2.0*L;
+    if(sarc < PI*r){
+      float a = 0.5*PI - sarc/r;             /* right cap, +90 deg down to -90 deg */
+      vec2 rad = vec2(cos(a), sin(a));
+      nrm = -rad;
+      return vec2(L, 0.0) + r*rad;
+    }
+    sarc -= PI*r;
+    float a = 0.5*PI + sarc/r;               /* left cap, +90 deg up to +270 deg  */
+    vec2 rad = vec2(cos(a), sin(a));
+    nrm = -rad;
+    return vec2(-L, 0.0) + r*rad;
+  }
+  vec2 sr = billiards_sinai(ecc);
+  float s = sr.x;
+  float sarc = u*8.0*s;
+  if(sarc < 2.0*s){ nrm = vec2(0.0, -1.0); return vec2(sarc - s,  s); }
+  sarc -= 2.0*s;
+  if(sarc < 2.0*s){ nrm = vec2(-1.0, 0.0); return vec2( s, s - sarc); }
+  sarc -= 2.0*s;
+  if(sarc < 2.0*s){ nrm = vec2(0.0,  1.0); return vec2(s - sarc, -s); }
+  sarc -= 2.0*s;
+  nrm = vec2(1.0, 0.0);
+  return vec2(-s, sarc - s);
+}
+
+vec3 shape_billiards(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int tb = int(P[0] + 0.5);
+  int Nb = int(P[1] + 0.5);
+  if(Nb < 1){ Nb = 1; }
+  float ecc = P[2];
+
+  /* initial condition: boundary point (q.x) + inward launch direction */
+  vec2 nrm;
+  vec2 o0 = billiards_start(tb, ecc, q.x, nrm);
+  float psi0 = mix(0.045, 0.5, P[3])*PI;                 /* AIM: tangent .. normal */
+  float psi = clamp(psi0 + (rnd.z - 0.5)*P[4]*PI, 0.035, PI - 0.035);
+  float sgn = (hashu(seed ^ 0x51ed270bu) & 1u) == 0u ? -1.0 : 1.0;
+  vec2 tv = vec2(-nrm.y, nrm.x);
+  vec2 dir = sgn*cos(psi)*tv + sin(psi)*nrm;             /* unit by construction */
+
+  /* hue: the conserved quantity where one exists, launch angle otherwise */
+  float hval;
+  if(tb == 0){
+    hval = abs(cos(psi));                                /* |L| = caustic radius / R */
+  } else if(tb == 1){
+    vec2 ab = billiards_ab(ecc);
+    float cf = sqrt(max(ab.x*ab.x - ab.y*ab.y, 0.0));
+    vec2 r1 = o0 - vec2(cf, 0.0);
+    vec2 r2 = o0 + vec2(cf, 0.0);
+    float L1 = r1.x*dir.y - r1.y*dir.x;                  /* angular momenta about foci */
+    float L2 = r2.x*dir.y - r2.y*dir.x;
+    hval = 0.5 + 0.5*tanh(2.0*L1*L2);                    /* sign splits ellipse/hyperbola caustics */
+  } else {
+    hval = psi/PI;
+  }
+
+  /* walk the orbit; deposit the point on chord kk at fraction q.y */
+  int kk = int(hashu(seed ^ 0x7f4a7c15u) % uint(Nb));
+  vec2 pt = o0;
+  vec2 ro = o0 + nrm*1.0e-5;                             /* nudge off the wall */
+  float acc = 0.0;
+  float tlen = 0.0;
+  bool ok = false;
+  for(int j = 0; j < 40; j++){
+    if(j >= Nb){ break; }
+    vec2 nh;
+    float t = billiards_hit(tb, ecc, ro, dir, nh);
+    if(t <= 0.0 || t > 4.0){ break; }                    /* miss / degenerate: give up */
+    if(j == kk){
+      tlen = t;
+      acc += t*q.y;
+      pt = ro + dir*(t*q.y);
+      ok = true;
+      break;
+    }
+    ro += dir*t;
+    acc += t;
+    dir = dir - 2.0*dot(dir, nh)*nh;                     /* specular reflection */
+    dir = normalize(dir + vec2(1.0e-9, 0.0));            /* renormalize each bounce */
+    ro += nh*1.0e-5;
+  }
+  if(!ok || abs(pt.x) > 1.6 || abs(pt.y) > 1.6){        /* lost or leaked: hide */
+    col = vec3(0.0); return vec3(0.0, -999.0, 0.0);
+  }
+
+  float yy = (float(kk) - 0.5*float(Nb - 1))*P[5];       /* LIFT: bounce index as strata */
+  vec3 p = vec3(pt.x, yy, pt.y);                         /* table lies in the xz-plane */
+
+  col = pal(hval*0.75 + 0.06,
+            vec3(0.46, 0.52, 0.50), vec3(0.38, 0.38, 0.36),
+            vec3(0.90, 0.85, 0.70), vec3(0.12, 0.36, 0.55));
+  col *= clamp(tlen*0.75, 0.05, 2.0);                    /* weight by chord length -> time average */
+  col *= 1.0 + 0.22*cos(2.6*acc - 1.3*uT);               /* faint pulse riding the unit-speed flow */
+  col *= 0.35 + 0.85*P[6];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/34-arnold.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "arnold",
+  name: "Arnold Tongues",
+  roman: "XXXIV",
+  accent: "#ffb0c8",
+  tex: "\\theta_{n+1}=\\theta_n+\\Omega+\\tfrac{K}{2\\pi}\\sin 2\\pi\\theta_n,\\qquad \\rho=\\lim_{n\\to\\infty}\\tfrac{\\theta_n-\\theta_0}{n}",
+  plain: "θₙ₊₁ = θₙ + Ω + (K/2π) sin 2πθₙ,   ρ = lim (θₙ − θ₀)/n",
+  caption: "Kick a rotor periodically and it may surrender its frequency. The circle map's winding number ρ, the mean advance per kick, locks onto each rational p/q inside a tongue fanning out from Ω=p/q on the K=0 axis, tongues interleaved in Farey order, opening with width of order K^q. Each point is one orbit iterated past its transient; the surface plots ρ−Ω, coloured by the locked denominator, grey-blue where no small rational claims the orbit. MODE 1 fixes K at K MAX and draws the devil's staircase: Ω is sampled uniformly, so the light each tread carries is the measure of its locking interval, and at K=1 the treads carry all the light.",
+  cam: { dist: 3.0, pitch: 0.5, tgtY: 0.0, rot: 0.04 },
+  gain: 0.8,
+  params: [
+    { label: "MODE",        min: 0,   max: 1,    step: 1,     def: 0    },
+    { label: "K MAX",       min: 0,   max: 1.2,  step: 0.005, def: 1.0  },
+    { label: "STEPS",       min: 50,  max: 336,  step: 1,     def: 200  },
+    { label: "HEIGHT",      min: 0,   max: 2,    step: 0.01,  def: 1.0  },
+    { label: "TONGUE TINT", min: 0,   max: 1,    step: 0.01,  def: 0.85 },
+    { label: "GLOW",        min: 0,   max: 1,    step: 0.01,  def: 0.6  }
+  ],
+  glsl: `
+vec3 shape_arnold(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode = int(P[0] + 0.5);
+  float Kmax = P[1];
+  int steps = int(P[2] + 0.5);
+  float H = P[3];
+  float tint = P[4];
+  float glow = P[5];
+
+  float Om = q.x;                          /* drive frequency, in turns */
+  float K = (mode == 0) ? q.y*Kmax : Kmax; /* coupling: plane in mode 0, slice in mode 1 */
+
+  float th = rnd.x;      /* IC-independent winding for K<1; averages sheets above */
+  float acc = 0.0;       /* unwrapped winding: plain sum of O(1) increments */
+  int total = 64 + steps;
+  for(int j = 0; j < 400; j++){
+    if(j >= total) break;
+    float d = Om + (K/TAU)*sin(TAU*th);
+    if(j >= 64) acc += d;                  /* discard 64 transient kicks */
+    th = fract(th + d);                    /* th wrapped to [0,1), so TAU*th stays well-conditioned */
+  }
+  float fsteps = max(float(steps), 1.0);   /* P[2] >= 50 by contract; guard the divide anyway */
+  float rho = acc/fsteps;
+
+  /* nearest rational p/q, lowest denominator first (Farey classification) */
+  float tol = 1.2/fsteps;                  /* just above the estimator's <1/N error on a locked orbit;
+                                              at default STEPS, tight enough that the golden mean
+                                              is not tinted as 5/8 */
+  int bq = 0;
+  for(int qi = 1; qi <= 8; qi++){
+    float fq = float(qi);
+    float pr = floor(rho*fq + 0.5);
+    if(abs(rho - pr/fq) < tol){ bq = qi; break; }
+  }
+
+  if(bq > 0){
+    vec3 tc = pal(float(bq)*0.125, vec3(0.62, 0.45, 0.52), vec3(0.38, 0.32, 0.38),
+                  vec3(1.0, 1.0, 1.0), vec3(0.0, 0.28, 0.6));
+    col = mix(vec3(0.8, 0.76, 0.8), tc, clamp(tint, 0.0, 1.0));
+  } else {
+    col = vec3(0.22, 0.28, 0.42);          /* quasiperiodic: dim grey-blue */
+  }
+  col *= 0.4 + 0.9*glow;
+
+  if(mode == 0){
+    return vec3((Om - 0.5)*2.4, (rho - Om)*H*4.0, (q.y - 0.5)*2.4);
+  }
+  return vec3((Om - 0.5)*2.6, (rho - 0.5)*H*1.8, (rnd.z - 0.5)*0.06);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/35-lyap.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "lyap",
+  name: "Lyapunov's Garden",
+  roman: "XXXV",
+  accent: "#c0e068",
+  tex: "x_{n+1}=r_n x_n(1-x_n),\\quad r_n\\in\\{a,b\\},\\qquad \\lambda=\\tfrac1N\\sum_{n}\\ln|r_n(1-2x_n)|",
+  plain: "xₙ₊₁ = rₙxₙ(1−xₙ),  rₙ ∈ {a,b},   λ = ⟨ ln|rₙ(1−2xₙ)| ⟩",
+  caption: "Drive the logistic map with two growth rates a and b taken in turns, the rhythm set by SEQUENCE. At each point (a, b) the Lyapunov exponent λ averages ln|rₙ(1−2xₙ)| over STEPS iterations: where alternation tames the map, λ < 0, and the swallow-shaped bays of stability rise as gold hills of height −λ, scaled by HEIGHT; the chaotic sea lies low, blue and dim. Every point is one uniform sample of the parameter square — density adds no structure here; the sculpture is the graph of λ. Along the diagonal a = b runs the cascade of Plate XIX. Markus charted these in 1989; Dewdney's 1991 column made them famous.",
+  cam: { dist: 3.4, pitch: 0.55, tgtY: 0.25, rot: 0.03 },
+  gain: 0.9,
+  params: [
+    { label: "SEQUENCE", min: 0,   max: 5,   step: 1,     def: 0    },
+    { label: "STEPS",    min: 60,  max: 384, step: 1,     def: 250  },
+    { label: "HEIGHT",   min: 0,   max: 1.5, step: 0.01,  def: 1.0  },
+    { label: "A MIN",    min: 2.4, max: 3.2, step: 0.001, def: 2.4  },
+    { label: "WINDOW",   min: 0.4, max: 1.6, step: 0.001, def: 1.6  },
+    { label: "TINT",     min: 0,   max: 1,   step: 0.01,  def: 0.5  },
+    { label: "GLOW",     min: 0,   max: 1,   step: 0.01,  def: 0.6  }
+  ],
+  glsl: `
+vec3 shape_lyap(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int sq = int(P[0] + 0.5);
+  /* forcing period: AB | AAB ABB | AABB AAAB ABBB */
+  int per;
+  if(sq == 0) per = 2; else if(sq <= 2) per = 3; else per = 4;
+  /* (a,b) window: A MIN pans, WINDOW zooms; clamp so the map stays in [0,1] */
+  float aLo  = P[3];
+  float span = min(P[4], 4.0 - aLo);
+  vec2 ab = vec2(aLo) + (q + (rnd.xy - 0.5)*0.0015) * span;
+  float a = clamp(ab.x, 2.4, 4.0);
+  float b = clamp(ab.y, 2.4, 4.0);
+
+  float x = 0.25 + 0.5*rnd.z;
+  float total = 40.0 + P[1];      /* 40 transient + STEPS charted */
+  float lam = 0.0;
+  float cnt = 0.0;
+  for(int j = 0; j < 424; j++){
+    if(float(j) >= total) break;
+    int m = j - (j/per)*per;      /* step index mod period */
+    bool useA;
+    if(sq == 0)      useA = (m == 0);   /* AB   */
+    else if(sq == 1) useA = (m < 2);    /* AAB  */
+    else if(sq == 2) useA = (m == 0);   /* ABB  */
+    else if(sq == 3) useA = (m < 2);    /* AABB */
+    else if(sq == 4) useA = (m < 3);    /* AAAB */
+    else             useA = (m == 0);   /* ABBB */
+    float r = useA ? a : b;
+    if(j >= 40){
+      lam += log(max(abs(r*(1.0 - 2.0*x)), 1.0e-12));
+      cnt += 1.0;
+    }
+    x = r*x*(1.0 - x);
+    x = clamp(x, 1.0e-6, 1.0 - 1.0e-6);
+  }
+  lam = clamp(lam/max(cnt, 1.0), -4.0, 4.0);
+
+  float u = (a - aLo)/max(span, 1.0e-6);
+  float v = (b - aLo)/max(span, 1.0e-6);
+  float relief = clamp(-lam, -1.0, 2.5);
+  vec3 p = vec3((u - 0.5)*2.4, relief*P[2]*0.4, (v - 0.5)*2.4);
+
+  /* stable bays: warm gold-green graded by -lambda; chaotic sea: cold dim blue */
+  float s = 1.0 - smoothstep(-0.06, 0.06, lam);
+  float t = clamp(-lam*0.4, 0.0, 1.0);
+  vec3 warm = pal(0.15 + 0.35*t + 0.3*(P[5] - 0.5),
+                  vec3(0.46, 0.50, 0.16), vec3(0.36, 0.42, 0.12),
+                  vec3(1.0, 1.0, 1.0), vec3(0.54, 0.50, 0.0));
+  warm *= 0.55 + 0.75*t;
+  vec3 cold = vec3(0.09, 0.14, 0.30)*(1.0 - 0.4*clamp(lam*0.8, 0.0, 1.0));
+  col = mix(cold, warm, s);
+  col *= 0.4 + 0.9*P[6];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/36-threebody.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "threebody",
+  name: "The Three-Body Ballet",
+  roman: "XXXVI",
+  accent: "#ffd070",
+  tex: "\\ddot{\\mathbf{x}}_i=\\sum_{j\\ne i}\\frac{\\mathbf{x}_j-\\mathbf{x}_i}{\\lVert\\mathbf{x}_j-\\mathbf{x}_i\\rVert^{3}},\\qquad T=6.32591398",
+  plain: "ẍᵢ = Σ_{j≠i} (xⱼ−xᵢ)/‖xⱼ−xᵢ‖³,   T = 6.32591398",
+  caption: "Three equal masses under Newtonian gravity — the problem Poincaré showed admits no general closed-form solution. Each point carries the exact initial conditions through a Runge–Kutta integration to a random fraction of the period, so brightness is dwell time: the slow arcs of the choreography glow brightest. MODE 0 is the figure-eight, found numerically by Moore in 1993 and proven by Chenciner and Montgomery in 2000 — one of the few known stable periodic three-body orbits. MODE 1 is Lagrange's rotating equilateral triangle of 1772, exact but unstable for equal masses: raise PERTURB and the nudge that merely thickens the eight scatters the triangle into escape. TIME LIFT unrolls time upward.",
+  cam: { dist: 3.1, pitch: 0.5, tgtY: 0.0, rot: 0.03 },
+  gain: 0.85,
+  params: [
+    { label: "MODE",      min: 0,   max: 1,   step: 1,    def: 0    },
+    { label: "STEPS",     min: 60,  max: 320, step: 1,    def: 200  },
+    { label: "PERTURB",   min: 0,   max: 2,   step: 0.01, def: 0    },
+    { label: "TIME LIFT", min: 0,   max: 1.5, step: 0.01, def: 0    },
+    { label: "SCALE",     min: 0.4, max: 1.4, step: 0.01, def: 1.0  },
+    { label: "GLOW",      min: 0,   max: 1,   step: 0.01, def: 0.6  }
+  ],
+  glsl: `
+vec2 threebody_fp(vec2 a, vec2 b){
+  /* softened pairwise term (b-a)/(|b-a|^2 + eps^2)^(3/2), G = 1, m = 1 */
+  vec2 d = b - a;
+  float s = dot(d, d) + 1.0e-6;
+  return d * (inversesqrt(s) / s);
+}
+vec3 shape_threebody(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode = int(P[0] + 0.5);
+  int nst  = int(P[1] + 0.5);
+  float amp = P[2] * 0.01;
+
+  vec2 p1, p2, p3, v1, v2, v3;
+  float span;
+  if(mode == 0){
+    /* Moore's figure-eight choreography: exact ICs, period T = 6.32591398 */
+    p1 = vec2(0.97000436, -0.24308753);
+    p2 = -p1;
+    p3 = vec2(0.0, 0.0);
+    v3 = vec2(-0.93240737, -0.86473146);
+    v1 = -0.5 * v3;
+    v2 = v1;
+    span = 6.32591398;
+  } else {
+    /* Lagrange 1772: equilateral triangle, unit side, radius r = 1/sqrt(3).
+       Force balance: |a| = 2 cos(30deg)/1^2 = sqrt(3); centripetal need is
+       omega^2 r = omega^2/sqrt(3), so omega^2 = 3, omega = sqrt(3), and each
+       speed omega*r = 1. Shown for two turns: span = 2 * 2pi/omega. */
+    float rr = 0.5773502692;
+    p1 = rr * vec2( 1.0,  0.0          );  v1 = vec2( 0.0,           1.0);
+    p2 = rr * vec2(-0.5,  0.8660254038);   v2 = vec2(-0.8660254038, -0.5);
+    p3 = rr * vec2(-0.5, -0.8660254038);   v3 = vec2( 0.8660254038, -0.5);
+    span = 7.2551974570;
+  }
+
+  /* per-point IC perturbation: PERTURB * (uniform - 0.5) * 0.01 on all 12
+     state components. amp = 0 leaves every point on the true orbit. */
+  p1 += (rnd.xy - 0.5) * amp;
+  p2 += (rnd.zw - 0.5) * amp;
+  uint hp = hashu(seed ^ 0x51ed270bu);
+  vec2 e;
+  e.x = u2f(hp) - 0.5; hp = hashu(hp);
+  e.y = u2f(hp) - 0.5; hp = hashu(hp);
+  p3 += e * amp;
+  e.x = u2f(hp) - 0.5; hp = hashu(hp);
+  e.y = u2f(hp) - 0.5; hp = hashu(hp);
+  v1 += e * amp;
+  e.x = u2f(hp) - 0.5; hp = hashu(hp);
+  e.y = u2f(hp) - 0.5; hp = hashu(hp);
+  v2 += e * amp;
+  e.x = u2f(hp) - 0.5; hp = hashu(hp);
+  e.y = u2f(hp) - 0.5; hp = hashu(hp);
+  v3 += e * amp;
+
+  /* random integration time in [0, span), slowly phase-shifted by uT so the
+     ballet runs; h = tstar/N varies per point, N is the constant loop bound */
+  float ph = fract(q.x + uT * 0.025);
+  float tstar = ph * span;
+  float h = tstar / max(float(nst), 1.0);
+
+  for(int j = 0; j < 320; j++){
+    if(j >= nst) break;
+    /* RK4 on the 12-float state; 3 pairwise forces per stage */
+    vec2 fA = threebody_fp(p1, p2);
+    vec2 fB = threebody_fp(p2, p3);
+    vec2 fC = threebody_fp(p3, p1);
+    vec2 a11 = fA - fC; vec2 a21 = fB - fA; vec2 a31 = fC - fB;
+
+    vec2 p1b = p1 + 0.5*h*v1;  vec2 p2b = p2 + 0.5*h*v2;  vec2 p3b = p3 + 0.5*h*v3;
+    vec2 v1b = v1 + 0.5*h*a11; vec2 v2b = v2 + 0.5*h*a21; vec2 v3b = v3 + 0.5*h*a31;
+    fA = threebody_fp(p1b, p2b); fB = threebody_fp(p2b, p3b); fC = threebody_fp(p3b, p1b);
+    vec2 a12 = fA - fC; vec2 a22 = fB - fA; vec2 a32 = fC - fB;
+
+    vec2 p1c = p1 + 0.5*h*v1b;  vec2 p2c = p2 + 0.5*h*v2b;  vec2 p3c = p3 + 0.5*h*v3b;
+    vec2 v1c = v1 + 0.5*h*a12;  vec2 v2c = v2 + 0.5*h*a22;  vec2 v3c = v3 + 0.5*h*a32;
+    fA = threebody_fp(p1c, p2c); fB = threebody_fp(p2c, p3c); fC = threebody_fp(p3c, p1c);
+    vec2 a13 = fA - fC; vec2 a23 = fB - fA; vec2 a33 = fC - fB;
+
+    vec2 p1d = p1 + h*v1c;  vec2 p2d = p2 + h*v2c;  vec2 p3d = p3 + h*v3c;
+    vec2 v1d = v1 + h*a13;  vec2 v2d = v2 + h*a23;  vec2 v3d = v3 + h*a33;
+    fA = threebody_fp(p1d, p2d); fB = threebody_fp(p2d, p3d); fC = threebody_fp(p3d, p1d);
+    vec2 a14 = fA - fC; vec2 a24 = fB - fA; vec2 a34 = fC - fB;
+
+    p1 += h/6.0*(v1 + 2.0*v1b + 2.0*v1c + v1d);
+    p2 += h/6.0*(v2 + 2.0*v2b + 2.0*v2c + v2d);
+    p3 += h/6.0*(v3 + 2.0*v3b + 2.0*v3c + v3d);
+    v1 += h/6.0*(a11 + 2.0*a12 + 2.0*a13 + a14);
+    v2 += h/6.0*(a21 + 2.0*a22 + 2.0*a23 + a24);
+    v3 += h/6.0*(a31 + 2.0*a32 + 2.0*a33 + a34);
+    if(dot(p1, p1) + dot(p2, p2) + dot(p3, p3) > 1.0e6) break;  /* runaway guard */
+  }
+
+  /* plot one of the three bodies, chosen by hash */
+  uint hb = hashu(seed ^ 0xb5297a4du);
+  int body = int(hb % 3u);
+  vec2 pw; float sp;
+  if(body == 0){ pw = p1; sp = length(v1); }
+  else if(body == 1){ pw = p2; sp = length(v2); }
+  else { pw = p3; sp = length(v3); }
+
+  if(any(isnan(pw)) || any(isinf(pw)) || dot(pw, pw) > 16.0){
+    col = vec3(0.0);
+    return vec3(0.0, -999.0, 0.0);      /* escaper: hide */
+  }
+
+  float bt = float(body)/3.0 + 0.05*min(sp*0.3, 1.0);
+  col = pal(bt, vec3(0.55, 0.45, 0.40), vec3(0.42, 0.35, 0.32),
+            vec3(1.0, 1.0, 1.0), vec3(0.02, 0.18, 0.42));
+  col *= 0.4 + 0.8*P[5];
+
+  float S = P[4];
+  return vec3(pw.x*S, (ph - 0.5)*P[3], pw.y*S);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/37-relativity.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "relativity",
+  name: "The Photon Sphere",
+  roman: "XXXVII",
+  accent: "#ff9a70",
+  tex: "\\frac{d^{2}u}{d\\varphi^{2}} = -u + 3u^{2},\\qquad u=\\frac{GM}{c^{2}r},\\qquad b_{c}=3\\sqrt{3}\\,\\frac{GM}{c^{2}}",
+  plain: "d²u/dφ² = −u + 3u²,   u = GM/(c²r),   b_c = 3√3 GM/c²",
+  caption: "Parallel light falls past a black hole, each ray integrating the exact null geodesic equation. Distant rays bend by Einstein's 4GM/c²b — the 1.75 arcseconds Eddington measured at the solar limb in 1919. Approaching the critical impact parameter b_c = 3√3 GM/c², they wind ever longer around the unstable circular orbit at r = 3GM/c², then escape pale gold or plunge ember red. Each point is one instant of one ray, laid down uniformly in orbital angle, so brightness measures the winding angle light spends at each radius: the photon sphere ignites by density alone. PLANE 3D fans the orbit planes into the shell whose apparent diameter, 2√27 GM/c², the Event Horizon Telescope resolved around M87*.",
+  cam: { dist: 3.2, pitch: 0.35, tgtY: 0.0, rot: 0.04 },
+  gain: 0.9,
+  params: [
+    { label: "BEAM CENTER", min: 1,    max: 8,    step: 0.01,  def: 4.75  },
+    { label: "BEAM WIDTH",  min: 0.05, max: 5,    step: 0.01,  def: 4.25  },
+    { label: "STEPS",       min: 60,   max: 360,  step: 1,     def: 220   },
+    { label: "PLANE 3D",    min: 0,    max: 1,    step: 0.01,  def: 0.15  },
+    { label: "SCALE",       min: 0.02, max: 0.09, step: 0.001, def: 0.045 },
+    { label: "GLOW",        min: 0,    max: 1,    step: 0.01,  def: 0.5   }
+  ],
+  glsl: `
+float relativity_acc(float u){ return 3.0*u*u - u; }   /* u'' in GM=c=1 units */
+vec3 shape_relativity(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  /* Schwarzschild null geodesic: horizon r=2, photon sphere r=3,
+     critical impact parameter b_c = 3*sqrt(3) ~ 5.196.  Each point is
+     one RK4 step count along one ray of a parallel beam. */
+  float b = P[0] + (q.x*2.0 - 1.0)*P[1];      /* impact parameter across the beam */
+  b = max(b, 0.05);
+  float u = 1.0/30.0;                          /* straight-line approach at r0 = 30 */
+  float phi = asin(clamp(b*u, -1.0, 1.0));
+  float w = cos(phi)/b;                        /* du/dphi */
+  int k = int(q.y*P[2]);                       /* emit at a uniform step along the ray */
+  float dphi = 0.03;
+  bool dead = false;
+  for(int j = 0; j < 360; j++){
+    if(j >= k) break;
+    float k1u = w;                  float k1w = relativity_acc(u);
+    float au = u + 0.5*dphi*k1u;    float aw = w + 0.5*dphi*k1w;
+    float k2u = aw;                 float k2w = relativity_acc(au);
+    float bu = u + 0.5*dphi*k2u;    float bw = w + 0.5*dphi*k2w;
+    float k3u = bw;                 float k3w = relativity_acc(bu);
+    float cu = u + dphi*k3u;        float cw = w + dphi*k3w;
+    float k4u = cw;                 float k4w = relativity_acc(cu);
+    u   += dphi/6.0*(k1u + 2.0*k2u + 2.0*k3u + k4u);
+    w   += dphi/6.0*(k1w + 2.0*k2w + 2.0*k3w + k4w);
+    phi += dphi;
+    if(u > 0.47){ dead = true; break; }                  /* about to cross the horizon */
+    if(w < 0.0 && u < 0.0285714){ dead = true; break; }  /* r > 35 past perihelion: escaped */
+  }
+  if(dead){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  float r = 1.0/max(u, 1.0e-4);
+  vec2 pl = vec2(cos(phi), sin(phi))*(r*P[4]);
+  float psi = (rnd.z - 0.5)*TAU*P[3];          /* orbit-plane tilt about the beam axis */
+  vec3 p = vec3(pl.x, pl.y*cos(psi), pl.y*sin(psi));
+  float t = clamp((b - 5.1961524)*0.30, -1.0, 1.0)*0.5 + 0.5;
+  col = pal(t, vec3(0.95, 0.575, 0.35), vec3(0.10, 0.275, 0.20),
+            vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5));
+  col *= (0.35 + 0.85*P[5]) * (0.86 + 0.14*sin(5.0*phi - 2.5*uT));
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/38-dipole.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "dipole",
+  name: "How Light Leaves an Antenna",
+  roman: "XXXVIII",
+  accent: "#90c8ff",
+  tex: "F(\\rho,\\theta)=\\sin^{2}\\!\\theta\\,\\Bigl(\\frac{\\cos(\\rho-t)}{\\rho}+\\sin(\\rho-t)\\Bigr)=c",
+  plain: "F(ρ,θ) = sin²θ · (cos(ρ−t)/ρ + sin(ρ−t)) = c",
+  caption: "Hertz drew these detaching loops in 1889. In a meridian plane the field lines of an oscillating dipole are level curves of a single flux function. Each point is sampled uniformly in radius and angle across an annulus and Newton-slid along the gradient onto one of CONTOURS hashed levels, so a line's brightness estimates the area draining onto it; where the gradient nearly vanishes, whole swaths land on one line and the pinch-off lights up by itself. Every half-cycle the quasi-static near-field loops pinch, detach, and sail outward at WAVE SPEED as the 1/r far field, dark along the dipole axis. SPREAD 3D revolves the plane into nested shells. The detachment is the radiation.",
+  cam: { dist: 3.3, pitch: 0.15, tgtY: 0.0, rot: 0.05 },
+  gain: 0.9,
+  params: [
+    { label: "RANGE",        min: 4,  max: 14, step: 0.1,  def: 9   },
+    { label: "CONTOURS",     min: 4,  max: 24, step: 1,    def: 12  },
+    { label: "NEWTON STEPS", min: 1,  max: 4,  step: 1,    def: 3   },
+    { label: "SPREAD 3D",    min: 0,  max: 1,  step: 0.01, def: 1.0 },
+    { label: "WAVE SPEED",   min: 0,  max: 3,  step: 0.01, def: 1.2 },
+    { label: "GLOW",         min: 0,  max: 1,  step: 0.01, def: 0.5 }
+  ],
+  glsl: `
+/* Exact flux function of the oscillating (Hertzian) dipole and its
+   gradient, in dimensionless rho = kr, tau = rho - t.  Returns
+   vec3(F, dF/drho, dF/dtheta).  Caller guarantees rho >= 0.35. */
+vec3 dipole_Fg(float rho, float th, float t){
+  float ta = rho - t;
+  float sn = sin(th), cs = cos(th);
+  float s2 = sn*sn;
+  float ct = cos(ta), st = sin(ta);
+  float ir = 1.0/rho;
+  float base = ct*ir + st;
+  return vec3(s2*base,
+              s2*(-st*ir - ct*ir*ir + ct),
+              2.0*sn*cs*base);
+}
+vec3 shape_dipole(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float rng = max(P[0], 2.0);
+  float t   = uT * P[4];
+
+  /* uniform sample of the meridian annulus */
+  float rho = mix(0.6, rng, q.x);
+  float th  = mix(0.05, PI - 0.05, q.y);
+  if(abs(sin(th)) < 0.05){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+  /* hashed ladder of contour levels in [-0.9, 0.9]; c = 0 exactly is the
+     degenerate axis/node set, so an exact-zero rung is nudged half a rung */
+  float nC = max(floor(P[1] + 0.5), 1.0);
+  float fj = min(floor(rnd.w * nC), nC - 1.0);
+  float cj = -0.9 + 1.8*(fj + 0.5)/nC;
+  if(abs(cj) < 1.0e-4) cj = 0.9/nC;
+
+  /* Newton projection of the scalar constraint F = cj along grad F */
+  vec3 fg = vec3(0.0);
+  for(int it = 0; it < 4; it++){
+    if(float(it) >= P[2]) break;
+    fg = dipole_Fg(rho, th, t);
+    float den = fg.y*fg.y + fg.z*fg.z + 1.0e-6;
+    float stp = (fg.x - cj)/den;
+    rho -= stp*fg.y;
+    th  -= stp*fg.z;
+    rho = clamp(rho, 0.35, rng + 0.8);
+  }
+  fg = dipole_Fg(rho, th, t);
+  if(abs(fg.x - cj) > 0.02){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  float snth = sin(th);
+  if(abs(snth) < 0.05){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  if(rho < 0.5 || rho > rng){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+  /* revolve about the dipole axis (world y); a hashed half-turn shows both
+     sides of the meridian at SPREAD 3D = 0, and is measure-neutral at 1 */
+  float az  = rnd.z * TAU * P[3];
+  float mir = ((hashu(seed ^ 0x9E3779B9u) & 1u) == 0u) ? 1.0 : -1.0;
+  float s   = 1.4/rng;
+  float rs  = rho*snth*mir*s;
+  vec3 world = vec3(rs*cos(az), rho*cos(th)*s, rs*sin(az));
+
+  /* sign of the level in two complementary hues; |grad F| heats the
+     near zone where the loops are being made */
+  float gm   = length(fg.yz);
+  float heat = 1.0 - exp(-0.8*gm);
+  vec3 hue = (cj > 0.0) ? vec3(0.32, 0.58, 1.0) : vec3(1.0, 0.60, 0.30);
+  col = hue * (0.55 + 0.75*heat);
+  col = mix(col, vec3(1.0, 0.97, 0.90), 0.30*heat*heat);
+  col *= 0.55 + 0.9*P[5];
+  return world;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/39-rainbow.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "rainbow",
+  name: "The Rainbow, Derived",
+  roman: "XXXIX",
+  accent: "#ffd8b0",
+  tex: "D_k=2(i-t)+k(\\pi-2t),\\qquad \\sin i=b=n(\\lambda)\\,\\sin t",
+  plain: "Dₖ = 2(i−t) + k(π−2t),   sin i = b = n(λ)·sin t",
+  caption: "Sunlight strikes a spherical raindrop: every ray refracts in, bounces k times, refracts out, and lands at its deviation angle — nothing else is computed. Where dD/db = 0 the exits stall and rays pile up; since brightness is ray density, the bow ignites on its own at 42 degrees from the antisolar point, red outside, with a colour-reversed secondary near 51 degrees (ORDERS counts the bounces) and Alexander's dark band between, where no one- or two-bounce ray can go. FRESNEL charges each interface its honest energy toll, so the secondary is fainter. MODE opens the droplet. Descartes ran this argument in 1637; only the supernumerary arcs, creatures of wave optics, escape the counting.",
+  cam: { dist: 2.6, pitch: 0.1, tgtY: 0.0, rot: 0.03 },
+  gain: 1.0,
+  params: [
+    { label: "MODE",       min: 0, max: 1, step: 1,    def: 0   },
+    { label: "ORDERS",     min: 1, max: 4, step: 1,    def: 2   },
+    { label: "DISPERSION", min: 0, max: 3, step: 0.01, def: 1   },
+    { label: "SUN WIDTH",  min: 0, max: 3, step: 0.01, def: 1   },
+    { label: "FRESNEL",    min: 0, max: 1, step: 0.01, def: 1   },
+    { label: "GLOW",       min: 0, max: 1, step: 0.01, def: 0.5 }
+  ],
+  glsl: `
+/* spectral colour, t = 0 (400nm violet) .. 1 (700nm red); each channel is a
+   product/sum of smoothsteps, so it is never negative and sums near-neutral */
+vec3 rainbow_wl2rgb(float t){
+  t = clamp(t, 0.0, 1.0);
+  float r = smoothstep(0.40, 0.62, t) + 0.30*(1.0 - smoothstep(0.02, 0.22, t));
+  float g = smoothstep(0.10, 0.36, t)*(1.0 - smoothstep(0.60, 0.88, t));
+  float b = 1.0 - smoothstep(0.26, 0.50, t);
+  return vec3(r, g, b)*(0.62 + 0.38*smoothstep(0.0, 0.10, t));
+}
+vec3 shape_rainbow(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode   = int(P[0] + 0.5);
+  float M    = P[1] - 0.001;          /* ORDERS */
+  float dsp  = P[2];
+  float sunw = P[3];
+  float fres = P[4];
+  float glow = P[5];
+
+  float b = q.x;                       /* impact parameter, sin i = b */
+  uint hs = hashu(seed ^ 2654435769u);
+  float lt = (mode == 0) ? q.y : u2f(hs);   /* q.y is the arc-param in mode 1 */
+  float lam = mix(400.0, 700.0, lt);        /* wavelength, nm */
+
+  /* Cauchy fit n = 1.3247 + 3088.5/lam^2: n(400) = 1.3440, n(700) = 1.3310.
+     DISPERSION scales the spread about the mean index 1.3375. */
+  float n = 1.3247 + 3088.5/(lam*lam);
+  n = max(1.3375 + (n - 1.3375)*dsp, 1.05);
+
+  float i  = asin(clamp(b, 0.0, 0.999999));
+  float st = clamp(b/n, 0.0, 1.0);
+  float t  = asin(st);
+  float ci = sqrt(max(1.0 - b*b, 1.0e-8));
+  float ct = sqrt(max(1.0 - st*st, 1.0e-8));
+
+  /* internal-reflection count: importance-sample low k, then divide by the
+     pick probability so brightness stays an unbiased estimate across orders */
+  float u = rnd.w;
+  int k = 1 + int(u*u*M);
+  if(k > 4) k = 4;
+  float kf = float(k);
+  float psel = max(sqrt(min(kf/M, 1.0)) - sqrt((kf - 1.0)/M), 1.0e-4);
+
+  /* Fresnel, unpolarized: s and p tracked separately through transmit-in,
+     k internal bounces, transmit-out, then averaged. Denominators never
+     vanish (n > 1 keeps ct > 0 even as ci -> 0), guarded anyway. */
+  float rs = (ci - n*ct)/max(ci + n*ct, 1.0e-6); rs = clamp(rs*rs, 1.0e-7, 1.0);
+  float rp = (n*ci - ct)/max(n*ci + ct, 1.0e-6); rp = clamp(rp*rp, 1.0e-7, 1.0);
+  float ts = 1.0 - rs;
+  float tp = 1.0 - rp;
+
+  float D = 2.0*(i - t) + kf*(PI - 2.0*t);    /* total deviation */
+
+  if(mode == 0){
+    /* THE SKY. Antisolar axis = +z; viewing angle folds D into [0,PI].
+       Check: b = 0.86, n = 1.333, k = 1 -> D = 2.407 rad = 137.9 deg,
+       tv = 42.1 deg; k = 2 stationary point folds to ~50.4 deg. */
+    float wf = 0.5*(ts*ts*pow(rs, kf) + tp*tp*pow(rp, kf));
+    float w = mix(1.0, 9.0*wf, fres)*b/psel;  /* b = annulus measure b db */
+    float tv = abs(mod(D, TAU) - PI);
+    uint hA = hashu(hs);
+    uint hB = hashu(hA);
+    float gj = u2f(hA) + u2f(hB) - 1.0;       /* triangular jitter in [-1,1] */
+    tv = clamp(tv + gj*0.008727*sunw, 0.0, PI);   /* sun disc, ~0.5 deg */
+    float al = rnd.z*TAU;
+    col = rainbow_wl2rgb(lt)*w*(0.35 + 0.85*glow);
+    return 1.25*vec3(sin(tv)*cos(al), sin(tv)*sin(al), cos(tv));
+  }
+
+  /* THE DROPLET. Unit circle, beam along +x at height b; entry point at
+     angle a0 = PI - i, each internal chord advances the contact point by
+     -(PI - 2t), and the chord from vertex m has direction angle
+     (t - i) - m(PI - 2t), so the exit ray leaves along (cos D, -sin D). */
+  float a0 = PI - i;
+  float ca = PI - 2.0*t;
+  int nseg = k + 3;                    /* beam + (k+1) chords + exit ray */
+  int sIdx = int(rnd.z*float(nseg)*0.99999);
+  if(sIdx > k + 2) sIdx = k + 2;
+  vec2 A; vec2 B;
+  float es; float ep;                  /* light left in each polarization */
+  if(sIdx == 0){
+    B = vec2(cos(a0), sin(a0));
+    A = B - vec2(0.7, 0.0);
+    es = 1.0; ep = 1.0;
+  } else if(sIdx <= k + 1){
+    float m0 = float(sIdx - 1);
+    A = vec2(cos(a0 - m0*ca), sin(a0 - m0*ca));
+    B = vec2(cos(a0 - (m0 + 1.0)*ca), sin(a0 - (m0 + 1.0)*ca));
+    es = ts*pow(rs, m0); ep = tp*pow(rp, m0);
+  } else {
+    A = vec2(cos(a0 - (kf + 1.0)*ca), sin(a0 - (kf + 1.0)*ca));
+    B = A + 0.95*vec2(cos(D), -sin(D));
+    es = ts*ts*pow(rs, kf); ep = tp*tp*pow(rp, kf);
+  }
+  float segLen = length(B - A);
+  vec2 pos2 = mix(A, B, q.y);
+  float w = mix(1.0, 0.5*(es + ep), fres)*clamp(segLen, 0.05, 2.0)*0.9;
+  /* Descartes' sweep: one lit pencil of rays drifts through b and visibly
+     stalls where dD/db = 0 -- the only intrinsic motion this figure has */
+  float b0 = 0.5 + 0.45*sin(0.3*uT);
+  w *= 1.0 + 0.7*exp(-(b - b0)*(b - b0)/0.0009);
+  col = rainbow_wl2rgb(lt)*w*(0.35 + 0.85*glow);
+  return vec3(0.72*pos2.x, 0.72*pos2.y, 0.0);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/40-nodal.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "nodal",
+  name: "The Random Wave",
+  roman: "XL",
+  accent: "#a8d8ff",
+  tex: "\\psi(\\mathbf{x})=\\sum_{j=1}^{M}\\cos\\!\\bigl(k\\,\\mathbf{n}_j\\!\\cdot\\mathbf{x}+\\varphi_j\\bigr),\\qquad \\psi=0",
+  plain: "ψ(x) = Σⱼ cos(k nⱼ·x + φⱼ),   ψ = 0",
+  caption: "Berry's random-wave model (1977): a high-energy eigenfunction of a classically chaotic cavity should look, statistically, like an isotropic superposition of plane waves sharing a single wavenumber. WAVES M cosines, their directions and phases dealt out by WAVE SEED, are summed, and each point is Newton-projected onto the silent set ψ = 0, so the cloud condenses into a Monte-Carlo portrait of the nodal set — lines in the disk, surfaces in the ball, as DIMENSION selects. It is the wild counterpart of Plate VIII's tidy separable figures. WAVENUMBER k fixes the wavelength, SLAB CUT shears the ball open, and drifting phases keep the foam seething.",
+  cam: { dist: 3.2, pitch: 0.3, tgtY: 0.0, rot: 0.05 },
+  gain: 0.9,
+  params: [
+    { label: "DIMENSION",    min: 2, max: 3,  step: 1,    def: 3   },
+    { label: "WAVES M",      min: 4, max: 24, step: 1,    def: 12  },
+    { label: "WAVENUMBER k", min: 6, max: 24, step: 0.1,  def: 14  },
+    { label: "WAVE SEED",    min: 0, max: 30, step: 1,    def: 7   },
+    { label: "NEWTON STEPS", min: 1, max: 4,  step: 1,    def: 3   },
+    { label: "SLAB CUT",     min: 0, max: 1,  step: 0.01, def: 0.0 },
+    { label: "GLOW",         min: 0, max: 1,  step: 0.01, def: 0.5 }
+  ],
+  glsl: `
+/* psi and grad psi in one pass. Directions and phases are hashed only
+   from the seed lever and j, so every point sees the same ensemble. */
+vec4 nodal_field(vec3 p, int M, float k, int dim, uint sbase){
+  float f = 0.0;
+  vec3 g = vec3(0.0);
+  for(int j = 0; j < 24; j++){
+    if(j >= M) break;
+    uint h1 = hashu(sbase + uint(j));
+    uint h2 = hashu(h1);
+    uint h3 = hashu(h2);
+    uint h4 = hashu(h3);
+    vec3 n;
+    if(dim == 2){
+      float a = TAU*u2f(h1);
+      n = vec3(cos(a), 0.0, sin(a));           /* isotropic in the plane */
+    } else {
+      float cz = 2.0*u2f(h2) - 1.0;            /* uniform on the sphere  */
+      float sz = sqrt(max(0.0, 1.0 - cz*cz));
+      float az = TAU*u2f(h1);
+      n = vec3(sz*cos(az), sz*sin(az), cz);
+    }
+    float ph = TAU*u2f(h3) + uT*(0.05 + 0.1*u2f(h4));  /* slow seethe */
+    float arg = k*dot(n, p) + ph;
+    f += cos(arg);
+    g -= k*sin(arg)*n;                         /* grad cos = -k sin * n  */
+  }
+  return vec4(g, f);
+}
+vec3 shape_nodal(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int dim = int(P[0] + 0.5);
+  int M   = int(P[1] + 0.5);
+  float k = P[2];
+  uint sbase = uint(P[3] + 0.5)*1000u + 77u;
+  vec3 p;
+  if(dim == 2){                                /* uniform in the disk    */
+    float r  = 1.3*sqrt(q.x);
+    float th = TAU*q.y;
+    p = vec3(r*cos(th), 0.0, r*sin(th));
+  } else {                                     /* uniform in the ball    */
+    float cz = 2.0*q.y - 1.0;
+    float sz = sqrt(max(0.0, 1.0 - cz*cz));
+    float az = TAU*q.x;
+    float rr = 1.3*pow(max(rnd.x, 1.0e-6), 0.3333333);
+    p = rr*vec3(sz*cos(az), cz, sz*sin(az));
+  }
+  for(int it = 0; it < 4; it++){
+    if(float(it) >= P[4]) break;
+    vec4 fg = nodal_field(p, M, k, dim, sbase);
+    vec3 gr = fg.xyz;
+    vec3 stp = fg.w*gr/(dot(gr, gr) + 1.0e-3);
+    float sl = length(stp);
+    float cap = 1.6/k;                         /* never jump past a sheet */
+    if(sl > cap) stp *= cap/sl;
+    p -= stp;
+    if(dim == 2) p.y = 0.0;
+  }
+  vec4 fg = nodal_field(p, M, k, dim, sbase);
+  float nrmf = inversesqrt(0.5*float(M));      /* psi in RMS units       */
+  float fn = fg.w*nrmf;
+  float lim = (dim == 2) ? length(p.xz) : length(p);
+  if(abs(fn) > 0.6/k || lim > 1.3){            /* unconverged, or outside window */
+    col = vec3(0.0);
+    return vec3(0.0, -999.0, 0.0);
+  }
+  float glow = 0.45 + 0.75*P[6];
+  if(dim == 2){
+    float gm = length(fg.xyz)*nrmf/k;          /* |grad|, O(1) units     */
+    float t = clamp(gm*0.9, 0.0, 1.0);
+    col = mix(vec3(0.07, 0.16, 0.30), vec3(0.85, 0.95, 1.15), t)*glow;
+    return p;
+  }
+  if(p.z > (0.5 - P[5])*2.9){                  /* slab cut, 3D only      */
+    col = vec3(0.0);
+    return vec3(0.0, -999.0, 0.0);
+  }
+  vec3 nrm = normalize(fg.xyz + vec3(1.0e-6));
+  col = (0.28 + 0.72*abs(nrm))*vec3(0.72, 0.86, 1.08)*glow;
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/41-wpath.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "wpath",
+  name: "Monsters of Analysis",
+  roman: "XLI",
+  accent: "#d8c8a8",
+  tex: "W(x)=\\sum_{n=0}^{N}a^{n}\\cos(b^{n}\\pi x)\\quad T(x)=\\sum 2^{-n}\\,\\mathrm{dist}(2^{n}x,\\mathbb{Z})\\quad R(x)=\\sum\\frac{\\sin(\\pi n^{2}x)}{\\pi n^{2}}",
+  plain: "W = Σ aⁿ cos(bⁿπx),  T = Σ 2⁻ⁿ dist(2ⁿx, ℤ),  R = Σ sin(πn²x)/πn²",
+  caption: "In 1872 Weierstrass presented the Berlin Academy with a function continuous everywhere yet differentiable nowhere. Depth is truncation N: the back wall is one cosine; each slice forward adds a term, and roughness arrives scale by scale until the front face is the monster itself. Brightness is the graph's occupation measure — steep strokes spread their points thin and burn faintest. Colour tracks the newest term, the latest wrinkle aglow. Once ab > 1 the graph has box dimension 2 + log a/log b, steered by AMPLITUDE and FREQ; FUNCTION swaps in Takagi's blancmange (1901) or Riemann's sum sin(πn²x)/πn², differentiable, Gerver proved, exactly at rationals with odd numerator and denominator; ZOOM descends into self-affine detail.",
+  cam: { dist: 3.4, pitch: 0.35, tgtY: 0.0, rot: 0.03 },
+  gain: 0.95,
+  params: [
+    { label: "FUNCTION",  min: 0,    max: 2,    step: 1,     def: 0    },
+    { label: "TERMS",     min: 1,    max: 24,   step: 1,     def: 18   },
+    { label: "AMPLITUDE", min: 0.3,  max: 0.95, step: 0.01,  def: 0.5  },
+    { label: "FREQ",      min: 2,    max: 9,    step: 1,     def: 7    },
+    { label: "ZOOM",      min: 0,    max: 2.5,  step: 0.01,  def: 0    },
+    { label: "CENTER X",  min: -1,   max: 1,    step: 0.001, def: 0    },
+    { label: "HEIGHT",    min: 0.2,  max: 1.8,  step: 0.01,  def: 1.0  },
+    { label: "GLOW",      min: 0,    max: 1,    step: 0.01,  def: 0.6  }
+  ],
+  glsl: `
+vec3 shape_wpath(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int fsel = int(P[0] + 0.5);          /* 0 Weierstrass, 1 Takagi, 2 Riemann */
+  float a = P[2];
+  float b = P[3];                       /* integer-valued frequency lever */
+  float halfw = pow(10.0, -P[4]);       /* sample window half-width 10^-ZOOM */
+  float x = P[5] + 0.05*halfw*sin(0.16*uT)   /* gentle pan, scaled to window */
+          + (q.x - 0.5)*2.0*halfw;
+  float nf = 1.0 + q.y*(P[1] - 1.0);    /* fractional truncation N, depth axis */
+
+  /* Phase kept in TURNS: t_0 = frac(x/2) (full-precision x, then halved),
+     t_{n+1} = frac(b t_n) with integer b, so cos(b^n pi x) = cos(TAU t_n)
+     and b^n itself is never formed. Takagi runs the same recurrence with
+     b = 2 and t_0 = frac(x), where dist(2^n x, Z) = min(t_n, 1 - t_n). */
+  float t   = (fsel == 1) ? fract(x) : fract(0.5*x);
+  float bb  = (fsel == 1) ? 2.0 : b;
+  float amp = 1.0;                      /* a^n, resp. 2^-n */
+  float s   = 0.0;                      /* the partial sum f_N(x) */
+  float mc  = 0.0;                      /* running mean, recenters Takagi */
+  float g   = 0.0;                      /* |newest term| / its envelope */
+  for(int i = 0; i < 24; i++){
+    float w = clamp(nf - float(i), 0.0, 1.0);   /* newest term fades in */
+    if(w <= 0.0) break;
+    float term; float rel;
+    if(fsel == 0){
+      float c = cos(TAU*t);             /* = cos(b^n pi x) */
+      term = amp*c;   rel = abs(c);
+    } else if(fsel == 1){
+      float dz = min(t, 1.0 - t);       /* dist(2^n x, Z), t already in turns */
+      term = amp*dz;  rel = 2.0*dz;
+      mc += 0.25*amp*w;                 /* mean of this term over a period */
+    } else {
+      float m = float(i + 1);
+      float sn = sin(PI*m*m*x);         /* direct: |arg| < 3.8e3 for n <= 24 */
+      term = sn/(PI*m*m);  rel = abs(sn);
+    }
+    s += w*term;
+    g  = mix(g, rel, w);
+    amp *= (fsel == 1) ? 0.5 : a;
+    t = fract(bb*t);                    /* integer-b phase advance in turns */
+  }
+  /* per-function vertical normalizer: sum a^n <= 1/(1-a); max T = 2/3;
+     |R| <= pi/6 */
+  float vsc = (fsel == 0) ? (1.0 - a) : ((fsel == 1) ? 1.4 : 1.8);
+  vec3 p = vec3((q.x - 0.5)*2.6, P[6]*vsc*(s - mc), (q.y - 0.5)*1.6);
+  col = pal(0.55 - 0.45*g + 0.05*q.y,
+            vec3(0.50, 0.45, 0.38), vec3(0.42, 0.36, 0.28),
+            vec3(1.0, 1.0, 1.0), vec3(0.00, 0.06, 0.18));
+  col *= 0.30 + 0.25*g + P[7]*(0.30 + 1.05*g);
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/42-cursum.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "cursum",
+  name: "Curlicues",
+  roman: "XLII",
+  accent: "#98e8b8",
+  tex: "S_N(x)=\\sum_{n=1}^{N}e^{\\,i\\pi x n^{2}},\\qquad\\Bigl|\\sum_{n=1}^{q}e^{2\\pi i\\,p n^{2}/q}\\Bigr|=\\sqrt{q}\\quad(\\gcd(p,q)=1,\\ q\\ \\text{odd})",
+  plain: "S_N(x) = Σ e^{iπxn²};   |Σ_{n=1..q} e^{2πipn²/q}| = √q  (gcd(p,q)=1, q odd)",
+  caption: "The running sum of e^{iπXn²} walks the plane in unit steps. Its turning rate drifts slowly, so stretches of the walk shadow the Cornu spiral of Fresnel diffraction — these are the curlicues, and Berry and Goldberg showed their spirals-within-spirals hierarchy is orchestrated by the continued fraction of X. At rational X = p/q the terms repeat and the walk becomes one motif stamped over and over; for p/q in lowest terms Gauss computed the complete sum exactly — magnitude √q for odd q. Every step has unit length, so brightness measures time spent: how often the sum revisits a neighbourhood. KIND selects linear, quadratic, or cubic Weyl phases — PHASE adds a linear term to the quadratic — the sums behind Plate XI's Riemann–Siegel formula.",
+  cam: { dist: 3.0, pitch: 0.9, tgtY: 0.15, rot: 0.02 },
+  gain: 0.9,
+  params: [
+    { label: "KIND",   min: 0,    max: 3,   step: 1,      def: 0         },
+    { label: "X",      min: 0,    max: 1,   step: 0.0005, def: 0.4142135 },
+    { label: "PHASE",  min: 0,    max: 1,   step: 0.0005, def: 0         },
+    { label: "LENGTH", min: 64,   max: 768, step: 1,      def: 384       },
+    { label: "SCALE",  min: 0.3,  max: 3,   step: 0.01,   def: 1.1       },
+    { label: "LIFT",   min: 0,    max: 1.2, step: 0.01,   def: 0.4       },
+    { label: "GLOW",   min: 0,    max: 1,   step: 0.01,   def: 0.6       }
+  ],
+  glsl: `
+vec3 shape_cursum(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  /* S_N = sum_{n=1..N} exp(i*pi*f(n)). The phase is kept in TURNS
+     (theta_n = f(n)/2 mod 1) and advanced by exact finite differences,
+     fract()ed every step, so float32 never sees the raw argument
+     pi*x*n^2 (~1e6 by n~700, which would eat all the low bits).
+     Quadratic f = x n^2, so theta_n = x n^2 / 2:
+       theta_1 = x/2;  first increment delta_1 = theta_2 - theta_1 = 3x/2;
+       increments grow by the constant second difference x:
+       delta_(n+1) = fract(delta_n + x),  theta_(n+1) = fract(theta_n + delta_n).
+       Check vs direct: step 1 direction TAU*(x/2) = pi*x*1^2, so
+       S_1 = (cos pi x, sin pi x); theta_2 = x/2 + 3x/2 = 2x gives
+       direction TAU*2x = pi*x*2^2. Both match e^(i pi x n^2) exactly.
+     Cubic f = x n^3, theta_n = x n^3 / 2, constant THIRD difference 3x:
+       theta_1 = x/2, d1_1 = (8x-x)/2 = 7x/2, d2_1 = 3x(1+1) = 6x, d3 = 3x.
+       Check: theta_2 = x/2 + 7x/2 = 4x = x*2^3/2;
+              theta_3 = 4x + (7x/2 + 6x) = 27x/2 = x*3^3/2. */
+  int kind = int(P[0] + 0.5);
+  float x = P[1];
+  float y = P[2];
+  float LEN = P[3];
+  int N = 1 + int(q.x*(LEN - 1.0));
+
+  float th, d1, d2, d3;
+  if(kind == 1){        /* linear f = x n: constant turning, the control circle */
+    th = fract(0.5*x); d1 = fract(0.5*x); d2 = 0.0; d3 = 0.0;
+  } else if(kind == 2){ /* quadratic + linear f = x n^2 + y n:
+                           theta_1 = (x+y)/2, delta_1 = (3x+y)/2, d2 = x */
+    th = fract(0.5*(x + y)); d1 = fract(1.5*x + 0.5*y); d2 = fract(x); d3 = 0.0;
+  } else if(kind == 3){ /* cubic Weyl f = x n^3 */
+    th = fract(0.5*x); d1 = fract(3.5*x); d2 = fract(6.0*x); d3 = fract(3.0*x);
+  } else {              /* quadratic f = x n^2 */
+    th = fract(0.5*x); d1 = fract(1.5*x); d2 = fract(x); d3 = 0.0;
+  }
+
+  vec2 S = vec2(0.0), Sprev = vec2(0.0);
+  float dLast = d1;
+  for(int n = 1; n <= 768; n++){
+    if(n > N) break;
+    Sprev = S;
+    S += vec2(cos(TAU*th), sin(TAU*th));
+    dLast = d1;                     /* local turning rate, turns per step */
+    th = fract(th + d1);
+    d1 = fract(d1 + d2);
+    d2 = fract(d2 + d3);
+  }
+
+  /* Filament, not dots: q.y interpolates the N-th unit step between
+     S_(N-1) and S_N. Every step has length 1, so the sampling is uniform
+     in arc length and density is literally time spent per unit area. */
+  vec2 w = mix(Sprev, S, q.y);
+  float sc = P[4]/(3.0 + sqrt(LEN));           /* adaptive: |S| ~ sqrt(N) typic. */
+  w *= sc;
+  float r = length(w);
+  w *= inversesqrt(1.0 + (r/1.35)*(r/1.35));   /* soft radial clamp to 1.35,
+                                                  direction preserved, no /0 */
+
+  float nf = (float(N - 1) + q.y)/LEN;         /* progress along the walk */
+  vec3 p = vec3(w.x, nf*P[5], w.y);
+
+  /* hue bands by the local turning rate: each spiral arm sits at nearly
+     constant delta, so arms pick up distinct colors; c = 1 keeps the
+     palette continuous across the delta = 0/1 wrap */
+  col = pal(dLast, vec3(0.42, 0.55, 0.45), vec3(0.38, 0.36, 0.34),
+            vec3(1.0, 1.0, 1.0), vec3(0.35, 0.10, 0.62));
+  float u = fract(nf - 0.045*uT);              /* a slow pen-stroke highlight */
+  u = min(u, 1.0 - u);
+  col *= (0.30 + 0.85*P[6])*(0.85 + 0.5*exp(-300.0*u*u));
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/43-ford.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "ford",
+  name: "Ford Circles",
+  roman: "XLIII",
+  accent: "#f0e090",
+  tex: "C\\!\\left(\\tfrac{p}{q}\\right):\\ \\text{radius }\\tfrac{1}{2q^{2}},\\qquad C\\!\\left(\\tfrac{p}{q}\\right)\\ \\text{tangent to}\\ C\\!\\left(\\tfrac{r}{s}\\right)\\iff|ps-qr|=1",
+  plain: "C(p/q): radius 1/(2q²) — tangent to C(r/s) ⇔ |ps−qr| = 1",
+  caption: "Above every reduced fraction p/q hangs a circle of radius 1/(2q²), tangent to the number line at p/q. No two circles overlap; two are tangent exactly when |ps − qr| = 1, precisely when the fractions are Farey neighbours, and between any tangent pair the mediant (p+r)/(q+s) hangs a circle kissing both, forever. Brightness is a counting measure on the rationals: at WEIGHT zero every fraction with denominator up to Q MAX carries equal light, so a region glows in proportion to how many rationals it holds. MODE launches a flight down the Stern–Brocot tree, which lists every positive rational exactly once; TREE DEPTH prolongs the dive toward the line these horocycles all touch.",
+  cam: { dist: 2.9, pitch: 0.2, tgtY: 0.25, rot: 0.03 },
+  gain: 0.8,
+  params: [
+    { label: "MODE",       min: 0,   max: 1,   step: 1,    def: 0   },
+    { label: "Q MAX",      min: 12,  max: 80,  step: 1,    def: 40  },
+    { label: "WEIGHT",     min: 0,   max: 1,   step: 0.01, def: 0.5 },
+    { label: "TREE DEPTH", min: 2,   max: 24,  step: 1,    def: 12  },
+    { label: "X SCALE",    min: 0.6, max: 2,   step: 0.01, def: 1.3 },
+    { label: "LIFT",       min: 0,   max: 1.2, step: 0.01, def: 0   },
+    { label: "GLOW",       min: 0,   max: 1,   step: 0.01, def: 0.6 }
+  ],
+  glsl: `
+int ford_gcd(int a, int b){
+  for(int i = 0; i < 14; i++){      /* 14 Euclid steps cover all q <= 80 */
+    if(b == 0) break;
+    int t = a - (a/b)*b;
+    a = b; b = t;
+  }
+  return a;
+}
+vec3 shape_ford(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode = int(P[0] + 0.5);
+  float QM = P[1];
+  float xs = P[4]*2.0;              /* isotropic map: x in [0,1] -> [-P4, P4] */
+  float lift = P[5]*0.32;
+  float glow = 0.5 + 0.7*P[6];
+  if(mode == 0){
+    /* pick a denominator with importance bias toward small q, then a
+       numerator; rejection on gcd keeps only reduced fractions */
+    float u = pow(rnd.x, 2.2);
+    int qd = 1 + int(u*(QM - 0.001));
+    int pd = int(rnd.y*(float(qd) + 1.0));
+    if(pd > qd) pd = qd;
+    if(ford_gcd(pd, qd) > 1){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+    float qf = float(qd);
+    float r = 0.5/(qf*qf);          /* center height == radius: exact tangency */
+    float fx = float(pd)/qf;
+    float a = q.x*TAU;
+    float px = fx + r*sin(a);
+    float py = r*(1.0 - cos(a));    /* touches y = 0 exactly at a = 0 */
+    /* exact compensation of the sampler: nq = per-fraction hit probability */
+    float s = 0.45454545;
+    float pq = pow(qf/QM, s) - pow(max((qf - 1.0)/QM, 1e-9), s);
+    float nq = max(pq/(qf + 1.0), 1e-7);
+    float q0 = sqrt(QM);
+    float n0 = (pow(q0/QM, s) - pow(max((q0 - 1.0)/QM, 1e-9), s))/(q0 + 1.0);
+    float ratio = n0/nq;
+    float wC = min(ratio, 32.0);                  /* equal light per circle     */
+    float wA = min(ratio*q0*q0/(qf*qf), 32.0);    /* equal light per arc length */
+    float w = mix(wC, wA, P[2]);
+    vec3 p = vec3((px - 0.5)*xs, py*xs, lift*log(qf));
+    col = pal(log2(qf)*0.16, vec3(0.55, 0.48, 0.40), vec3(0.35, 0.33, 0.30),
+              vec3(1.0, 0.9, 0.7), vec3(0.0, 0.15, 0.35));
+    /* horocycle glint: a brightness wave circulating around each circle */
+    col *= w*glow*(1.0 + 0.25*sin(a - uT*(0.4 + 0.08*min(qf, 25.0))));
+    return p;
+  }
+  /* MODE 1: Stern-Brocot flight. Descend by hashed mediant steps from the
+     neighbours 0/1, 1/1; draw the segment joining two successive circle-tops */
+  int D = int(P[3] + 0.5);
+  D = max(2, min(24, D));
+  uint bits = hashu(seed);
+  int kSel = int(u2f(hashu(seed ^ 0x51ed270bu))*float(D - 1));
+  kSel = min(kSel, D - 2);
+  int pl = 0; int ql = 1;
+  int pr = 1; int qr = 1;
+  int pA = 1; int qA = 2;
+  int pB = 1; int qB = 2;
+  for(int j = 0; j < 24; j++){
+    if(j >= D) break;
+    int pm = pl + pr;
+    int qm = ql + qr;
+    if(j == kSel){ pA = pm; qA = qm; }
+    if(j == kSel + 1){ pB = pm; qB = qm; }
+    if(((bits >> uint(j)) & 1u) == 0u){ pr = pm; qr = qm; }
+    else { pl = pm; ql = qm; }
+  }
+  float t = q.x;
+  float qAf = float(qA);
+  float qBf = float(qB);
+  float xA = float(pA)/qAf;
+  float xB = float(pB)/qBf;
+  vec3 A = vec3((xA - 0.5)*xs, xs/(qAf*qAf), lift*log(qAf));
+  vec3 B = vec3((xB - 0.5)*xs, xs/(qBf*qBf), lift*log(qBf));
+  vec3 p = mix(A, B, t);
+  float hq = mix(qAf, qBf, t);
+  col = pal(log2(hq)*0.16, vec3(0.55, 0.48, 0.40), vec3(0.35, 0.33, 0.30),
+            vec3(1.0, 0.9, 0.7), vec3(0.0, 0.15, 0.35));
+  col *= glow*(0.65 + 0.35*sin(TAU*t - uT*1.1 + float(kSel)*1.7));
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/44-e8.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "e8",
+  name: "The Shape of E8",
+  roman: "XLIV",
+  accent: "#d4b8ff",
+  tex: "\\Phi(E_8)=\\{\\pm e_i\\pm e_j\\}_{i<j}\\;\\cup\\;\\bigl\\{\\tfrac{1}{2}(\\pm1,\\dots,\\pm1)\\bigr\\}_{\\#(-)\\ \\text{even}},\\qquad|\\Phi|=240,\\quad h=30",
+  plain: "Φ(E₈) = {±eᵢ±eⱼ, i<j} ∪ {½(±1,…,±1), # of − even};  |Φ| = 240,  h = 30",
+  caption: "The 240 roots of E8 — 112 integer, 128 half-integer, all the same length — decoded one per point and flattened onto the Coxeter plane, where they fall into eight concentric rings of thirty: the figure Peter McMullen drew by hand and John Stembridge computed in 2007. The same vectors are how spheres touch in the densest packing in eight dimensions. MODE 1 traces the 6720 edges joining each root to its 56 nearest neighbours; every root receives equal samples, so the bright heart of the figure is purely projected edges crowding. Depth comes from a second eigenplane, swung by 4D TURN: the object never moves; our shadow of it does.",
+  cam: { dist: 3.0, pitch: 0.1, tgtY: 0.0, rot: 0.03 },
+  gain: 0.8,
+  params: [
+    { label: "MODE",     min: 0,   max: 2,   step: 1,    def: 2    },
+    { label: "4D TURN",  min: 0,   max: 1,   step: 0.01, def: 0.15 },
+    { label: "Z DEPTH",  min: 0,   max: 1,   step: 0.01, def: 0.35 },
+    { label: "RING HUE", min: 0,   max: 1,   step: 0.01, def: 0.55 },
+    { label: "SCALE",    min: 0.6, max: 1.3, step: 0.01, def: 1.15 },
+    { label: "GLOW",     min: 0,   max: 1,   step: 0.01, def: 0.6  }
+  ],
+  glsl: `
+/* Coxeter-plane basis for E8, precomputed by diagonalizing the Coxeter
+   element: u1/u2 span the Petrie eigenplane (exponent 1, the famous
+   30-fold picture), u3/u4 span the exponent-7 eigenplane used for depth.
+   Coordinates 0-3 live in the "a" vec4, coordinates 4-7 in the "b". */
+const vec4 e8_u1a = vec4(0.0, 0.11911770, 0.19273649, 0.21763887);
+const vec4 e8_u1b = vec4(0.19273649, 0.11911770, 0.0, 0.92193306);
+const vec4 e8_u2a = vec4(-0.09689907, -0.46350566, -0.23693033, 0.0);
+const vec4 e8_u2b = vec4(0.23693033, 0.46350566, 0.66982357, 0.0);
+const vec4 e8_u3a = vec4(0.0, 0.38336132, -0.23693033, -0.74996791);
+const vec4 e8_u3b = vec4(-0.23693033, 0.38336132, 0.0, 0.17704341);
+const vec4 e8_u4a = vec4(-0.15941060, 0.11911770, 0.56978596, 0.0);
+const vec4 e8_u4b = vec4(-0.56978596, -0.11911770, 0.54488358, 0.0);
+
+void e8_set(int idx, float val, inout vec4 a, inout vec4 b){
+  if(idx == 0) a.x = val; else if(idx == 1) a.y = val;
+  else if(idx == 2) a.z = val; else if(idx == 3) a.w = val;
+  else if(idx == 4) b.x = val; else if(idx == 5) b.y = val;
+  else if(idx == 6) b.z = val; else b.w = val;
+}
+
+/* Decode root index 0..239 into 8 coordinates (ra = 0-3, rb = 4-7). */
+void e8_root(int r, out vec4 ra, out vec4 rb){
+  ra = vec4(0.0); rb = vec4(0.0);
+  if(r < 112){
+    /* integer roots: +-e_i +- e_j, i<j. 28 pairs x 4 signs.
+       m = r/4 in 0..27 -> (i,j) by the subtract idiom:
+       i = 0 covers 7 pairs (j = 1..7), i = 1 covers 6, ... i = 6 covers 1.
+       m = 0 -> (0,1); m = 27 -> (6,7). Every m < 28 breaks inside. */
+    int m = r / 4;
+    int ii = 0;
+    int jj = 1;
+    for(int i = 0; i < 7; i++){
+      int cnt = 7 - i;
+      if(m < cnt){ ii = i; jj = i + 1 + m; break; }
+      m -= cnt;
+    }
+    e8_set(ii, ((r & 1) != 0) ? -1.0 : 1.0, ra, rb);
+    e8_set(jj, ((r & 2) != 0) ? -1.0 : 1.0, ra, rb);
+  } else {
+    /* half-integer roots: (+-1/2)^8 with an even number of minus signs.
+       s = r-112 in 0..127 gives 7 free sign bits for coords 0..6; the
+       sign of coord 7 is the parity of those bits (shift loop - ES 3.00
+       has no bitCount), which makes the total minus count even. */
+    uint s = uint(r - 112);
+    uint par = 0u;
+    uint t = s;
+    for(int k = 0; k < 7; k++){ par = par ^ (t & 1u); t = t >> 1u; }
+    ra = vec4(((s &  1u) != 0u) ? -0.5 : 0.5,
+              ((s &  2u) != 0u) ? -0.5 : 0.5,
+              ((s &  4u) != 0u) ? -0.5 : 0.5,
+              ((s &  8u) != 0u) ? -0.5 : 0.5);
+    rb = vec4(((s & 16u) != 0u) ? -0.5 : 0.5,
+              ((s & 32u) != 0u) ? -0.5 : 0.5,
+              ((s & 64u) != 0u) ? -0.5 : 0.5,
+              (par == 1u)       ? -0.5 : 0.5);
+  }
+}
+
+vec3 shape_e8(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode = int(P[0] + 0.5);
+  uint h = hashu(seed);
+  int r = int(h % 240u);
+  vec4 ra, rb;
+  e8_root(r, ra, rb);
+
+  bool edge = (mode == 1);
+  if(mode == 2){ h = hashu(h); edge = (h & 1u) != 0u; }
+
+  /* Petrie projection of root A - all vec4 dots, zero dynamic indexing */
+  float ax = dot(e8_u1a, ra) + dot(e8_u1b, rb);
+  float ay = dot(e8_u2a, ra) + dot(e8_u2b, rb);
+
+  /* nearest of the 8 exact ring radii names the ring */
+  float rr = sqrt(ax*ax + ay*ay);
+  float ring = 0.0;
+  float bd = abs(rr - 0.238235);
+  float dd = abs(rr - 0.385473); if(dd < bd){ bd = dd; ring = 1.0; }
+  dd = abs(rr - 0.473861); if(dd < bd){ bd = dd; ring = 2.0; }
+  dd = abs(rr - 0.572925); if(dd < bd){ bd = dd; ring = 3.0; }
+  dd = abs(rr - 0.704294); if(dd < bd){ bd = dd; ring = 4.0; }
+  dd = abs(rr - 0.766723); if(dd < bd){ bd = dd; ring = 5.0; }
+  dd = abs(rr - 0.927011); if(dd < bd){ bd = dd; ring = 6.0; }
+  dd = abs(rr - 1.139572); if(dd < bd){ bd = dd; ring = 7.0; }
+
+  /* depth breathes through the second eigenplane; the xy silhouette
+     keeps its 30-fold symmetry no matter what uT does */
+  float cw = cos(uT * P[1]);
+  float sw = sin(uT * P[1]);
+
+  vec3 p;
+  if(edge){
+    /* neighbor search: candidates from a fresh hash chain, accept when
+       <A,B> = 1 (56 of 240 qualify, ~23% per try; miss chance after 24
+       tries is ~0.2%) - on total failure, hide this point */
+    vec4 ba = vec4(0.0);
+    vec4 bb = vec4(0.0);
+    bool found = false;
+    for(int t = 0; t < 24; t++){
+      h = hashu(h);
+      vec4 ca, cb;
+      e8_root(int(h % 240u), ca, cb);
+      float ip = dot(ra, ca) + dot(rb, cb);
+      if(ip > 0.5 && ip < 1.5){ ba = ca; bb = cb; found = true; break; }
+    }
+    if(!found){
+      col = vec3(0.0);
+      return vec3(0.0, -999.0, 0.0);
+    }
+    /* the projection is linear, so mixing in 8D before projecting
+       samples the projected segment uniformly in q.y */
+    vec4 ma = mix(ra, ba, q.y);
+    vec4 mb = mix(rb, bb, q.y);
+    float x = dot(e8_u1a, ma) + dot(e8_u1b, mb);
+    float y = dot(e8_u2a, ma) + dot(e8_u2b, mb);
+    float z = (cw*(dot(e8_u3a, ma) + dot(e8_u3b, mb))
+             + sw*(dot(e8_u4a, ma) + dot(e8_u4b, mb))) * P[2];
+    p = vec3(x, y, z) + (rnd.xyz - 0.5)*0.006;
+  } else {
+    /* orb: tight uniform ball around the projected root */
+    float z = (cw*(dot(e8_u3a, ra) + dot(e8_u3b, rb))
+             + sw*(dot(e8_u4a, ra) + dot(e8_u4b, rb))) * P[2];
+    float ct = 1.0 - 2.0*q.x;
+    float st = sqrt(max(0.0, 1.0 - ct*ct));
+    float ph = TAU*q.y;
+    float ob = 0.024*pow(rnd.x + 1e-6, 0.33333);
+    p = vec3(ax, ay, z) + vec3(st*cos(ph), ct, st*sin(ph))*ob;
+  }
+  p *= P[4];
+
+  col = pal(ring*0.125 + P[3], vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col *= (0.30 + 0.95*P[5])*(0.85 + 0.3*rnd.w);
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/45-elliptic.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "elliptic",
+  name: "Elliptic Curves",
+  roman: "XLV",
+  accent: "#a0e8e0",
+  tex: "y^{2}=x^{3}+ax+b,\\qquad x_{3}=m^{2}-x_{P}-x_{Q},\\qquad \\Delta=-16\\,(4a^{3}+27b^{2})",
+  plain: "y² = x³ + ax + b;   x₃ = m² − x_P − x_Q;   Δ = −16(4a³ + 27b²)",
+  caption: "A line through two points of the cubic meets it once more; reflect that third point across the x-axis and you have added the two — an associative group law. A marked point P patrols the curve, a CHORDS fraction of the cloud fans chords from P to random partners, and teal beads mark the sums P + Q back on the curve; brightness estimates how often the chords cross a region. Slide A and B across Δ = −16(4a³ + 27b²) = 0 and the curve pinches singular. MODE 1 reads the same equation modulo primes up to P MAX, one curtain per prime; wherever the curve stays smooth mod p, its count hugs p + 1 within Hasse's 2√p. Wiles reached Fermat through these curves.",
+  cam: { dist: 3.2, pitch: 0.25, tgtY: 0.0, rot: 0.04 },
+  gain: 0.9,
+  params: [
+    { label: "MODE",   min: 0,   max: 1,  step: 1,    def: 0    },
+    { label: "A",      min: -4,  max: 1.5,step: 0.01, def: -2   },
+    { label: "B",      min: -2,  max: 3,  step: 0.01, def: 1    },
+    { label: "P MAX",  min: 13,  max: 97, step: 1,    def: 61   },
+    { label: "CHORDS", min: 0,   max: 1,  step: 0.01, def: 0.35 },
+    { label: "WINDOW", min: 1.5, max: 4,  step: 0.01, def: 2.6  },
+    { label: "GLOW",   min: 0,   max: 1,  step: 0.01, def: 0.6  }
+  ],
+  glsl: `
+/* right-hand side of the Weierstrass cubic */
+float elliptic_rhs(float x, float a, float b){
+  return x*x*x + a*x + b;
+}
+/* nearest x to xr in [-W,W] whose point lies on the real locus and
+   inside the square window (rhs in [0,W^2]). Returns (x, +sqrt(rhs));
+   a negative y-slot flags failure (no visible locus at all).
+   130 steps of W/32 reach past 2W: the whole window from either end. */
+vec2 elliptic_locus(float xr, float a, float b, float W){
+  float st = W/32.0;
+  for(int j = 0; j < 130; j++){
+    float off = float((j + 1)/2)*st;
+    float x = (j - (j/2)*2 == 0) ? xr + off : xr - off;
+    x = clamp(x, -W, W);
+    float r = elliptic_rhs(x, a, b);
+    if(r >= 0.0 && r <= W*W) return vec2(x, sqrt(r));
+  }
+  return vec2(0.0, -1.0);
+}
+/* trial division; d<10 covers everything below 100 */
+bool elliptic_isprime(int n){
+  if(n < 2) return false;
+  for(int d = 2; d < 10; d++){
+    if(d*d > n) break;
+    if(n - (n/d)*d == 0) return false;
+  }
+  return true;
+}
+/* positive mod for possibly-negative v */
+int elliptic_pmod(int v, int m){
+  int r = v - (v/m)*m;
+  return (r < 0) ? r + m : r;
+}
+vec3 shape_elliptic(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int mode = int(P[0] + 0.5);
+  float A = P[1];
+  float B = P[2];
+  float glow = 0.35 + 0.85*P[6];
+
+  if(mode == 0){
+    /* ── chords over R: the group law drawn live ── */
+    float W = P[5];
+    float s = 1.15/W;
+
+    /* marked point P: triangle sweep of the window, clamped onto the
+       locus; the y-sign flips each traversal so P loops the curve */
+    float t   = uT*0.1;
+    float tri = abs(2.0*fract(t) - 1.0);
+    vec2  Pc  = elliptic_locus(mix(-W, W, tri), A, B, W);
+    float sgn = (fract(t) < 0.5) ? 1.0 : -1.0;
+    float xP  = Pc.x;
+    float yP  = sgn*Pc.y;
+    bool  okP = Pc.y >= 0.0;
+
+    if(rnd.x < P[4]){
+      /* chord pencil: hash-pick a partner Q on the visible curve */
+      if(!okP){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+      uint h = hashu(seed ^ 0x51ed270bu);
+      float xQ = 0.0;
+      float yQ = -1.0;
+      for(int j = 0; j < 8; j++){
+        float xc = mix(-W, W, u2f(h));
+        float rc = elliptic_rhs(xc, A, B);
+        if(rc >= 0.0 && rc <= W*W){ xQ = xc; yQ = sqrt(rc); break; }
+        h = hashu(h);
+      }
+      if(yQ < 0.0){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+      h = hashu(h + 0x9e3779b9u);
+      if(u2f(h) < 0.5) yQ = -yQ;
+
+      /* slope: secant through P,Q; tangent when they coincide; hidden
+         when vertical at a 2-torsion point (the sum is at infinity) */
+      float m = 0.0;
+      float dx = xQ - xP;
+      if(abs(dx) > 1.0e-4){
+        m = (yQ - yP)/dx;
+      } else if(abs(yP) > 1.0e-4){
+        m = (3.0*xP*xP + A)/(2.0*yP);
+      } else { col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+      float x3 = m*m - xP - xQ;          /* third intersection        */
+      float y3 = m*(x3 - xP) + yP;
+
+      if(rnd.y < 0.14){
+        /* sum bead: P+Q = (x3,-y3), the third hit reflected */
+        vec2 sm = vec2(x3, -y3) + (rnd.zw - 0.5)*0.05;
+        if(abs(sm.x) > W || abs(sm.y) > W){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+        col = vec3(0.63, 0.95, 0.90)*1.5*glow;
+        return vec3(sm.x*s, (u2f(hashu(h)) - 0.5)*0.03, sm.y*s);
+      }
+      /* the chord itself, spanning P, Q and the third hit, overshot
+         slightly; clipped hard to the window box */
+      float lo = min(x3, min(xP, xQ));
+      float hi = max(x3, max(xP, xQ));
+      float pad = 0.06*(hi - lo) + 0.02;
+      float xl = mix(lo - pad, hi + pad, q.y);
+      float yl = m*(xl - xP) + yP;
+      if(abs(xl) > W || abs(yl) > W){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+      col = vec3(0.10, 0.17, 0.26)*0.85*glow;
+      return vec3(xl*s, (rnd.w - 0.5)*0.03, yl*s);
+    }
+
+    if(rnd.y < 0.006){
+      /* the marked point itself */
+      if(!okP){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+      vec2 jj = (rnd.zw - 0.5)*0.08;
+      col = vec3(1.25, 1.05, 0.70)*1.2*glow;
+      return vec3((xP + jj.x)*s,
+                  (u2f(hashu(seed ^ 0x3ac5b1d7u)) - 0.5)*0.02,
+                  (yP + jj.y)*s);
+    }
+
+    /* the curve as filament: uniform in x, weighted toward constant
+       energy per arc length (capped at the vertical tangents) */
+    float x = mix(-W, W, q.x);
+    float r = elliptic_rhs(x, A, B);
+    if(r < 0.0){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+    float y = sqrt(r);
+    if(y > W){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+    if(rnd.z < 0.5) y = -y;
+    float dydx = (3.0*x*x + A)/(2.0*max(abs(y), 1.0e-3));
+    float wt = clamp(sqrt(1.0 + dydx*dydx), 1.0, 3.0);
+    col = vec3(1.00, 0.72, 0.40)*0.40*wt*glow;
+    return vec3(x*s, (rnd.w - 0.5)*0.025, y*s);
+  }
+
+  /* ── curtains over F_p: the same equation through prime lenses ── */
+  float PM = P[3];
+  int Ai = int(floor(A + 0.5));
+  int Bi = int(floor(B + 0.5));
+
+  /* q.y strata pick a curtain; walk down to the prime at or below
+     (largest gap under 100 is 8 wide, so 12 steps always suffice) */
+  int p = 5 + int(q.y*(PM - 4.0));
+  p = min(p, int(PM + 0.5));
+  for(int j = 0; j < 12; j++){
+    if(elliptic_isprime(p)) break;
+    p = p - 1;
+  }
+  if(!elliptic_isprime(p)) p = 5;
+
+  int xi = int(q.x*float(p));
+  if(xi > p - 1) xi = p - 1;
+  int x2 = elliptic_pmod(xi*xi, p);            /* reduce, then multiply */
+  int rh = elliptic_pmod(x2*xi + Ai*xi + Bi, p);
+
+  /* y with y^2 = rh (mod p): scan the low half, mirror for the rest */
+  int yf = -1;
+  for(int yy = 0; yy < 49; yy++){
+    if(yy + yy > p) break;
+    if(elliptic_pmod(yy*yy, p) == rh){ yf = yy; break; }
+  }
+  if(yf < 0){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  int ys = yf;
+  if(yf > 0 && rnd.z < 0.5) ys = p - yf;
+
+  float fp = float(p);
+  float ty = (fp - 5.0)/max(PM - 5.0, 1.0);
+  vec3 pos = vec3((float(xi)/fp - 0.5)*2.2,
+                  (ty - 0.5)*1.6,
+                  (float(ys)/fp - 0.5)*2.2);
+  pos += (vec3(rnd.w, rnd.y, rnd.x) - 0.5)*0.018;
+  col = pal(ty*0.8 + 0.05, vec3(0.45, 0.55, 0.55), vec3(0.40, 0.35, 0.35),
+            vec3(1.0), vec3(0.60, 0.35, 0.25));
+  col *= 0.9*glow;
+  return pos;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/46-hilbert.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "hilbert",
+  name: "The Space-Filling Curve",
+  roman: "XLVI",
+  accent: "#ffb890",
+  tex: "H\\colon[0,1]\\twoheadrightarrow[0,1]^{D},\\qquad |H(s)-H(t)|\\le C\\,|s-t|^{1/D}",
+  plain: "H: [0,1] ↠ [0,1]^D (onto),   |H(s)−H(t)| ≤ C·|s−t|^(1/D)",
+  caption: "One unbroken thread, never crossing itself, visits every cell — Hilbert's 1891 construction, a year after Peano's: in the limit, a continuous map from segment onto cube, nowhere differentiable, necessarily not one-to-one. Points fall uniformly along the thread: even brightness is the curve spreading the segment's measure evenly through space. Consecutive cells share a face at every ORDER — Hölder locality with the optimal exponent 1/DIMENSION — so hue, the position along the thread, forms coherent patches. Flip MORTON to 1966 bit-interleaving: the same cells in an order teleporting across the cube, shattering the hue — losing the locality spatial indexes prize. Raise ORDER and the thread becomes the cube.",
+  cam: { dist: 3.1, pitch: 0.3, tgtY: 0, rot: 0.05 },
+  gain: 0.9,
+  params: [
+    { label: "DIMENSION",   min: 2, max: 3, step: 1,    def: 3    },
+    { label: "ORDER",       min: 1, max: 8, step: 1,    def: 4    },
+    { label: "MORTON",      min: 0, max: 1, step: 1,    def: 0    },
+    { label: "TUBE",        min: 0, max: 1, step: 0.01, def: 0.25 },
+    { label: "COLOR CYCLE", min: 0, max: 3, step: 0.01, def: 1.0  },
+    { label: "GLOW",        min: 0, max: 1, step: 0.01, def: 0.7  }
+  ],
+  glsl: `
+uvec3 hilbert_decode(uint n, int D, int ord, bool morton){
+  /* Skilling transpose (AIP Conf. Proc. 707, 2004), unrolled for D = 2, 3.
+     Step 1: distribute the D*ord bits of n round-robin MSB-first;
+     axis = bitpos mod D counting from the MSB. */
+  uint x0 = 0u; uint x1 = 0u; uint x2 = 0u;
+  int nbits = D*ord;                       /* at most 3*6 = 18 or 2*8 = 16 */
+  for(int b = 0; b < 18; b++){
+    if(b >= nbits) break;
+    uint bit = (n >> uint(nbits - 1 - b)) & 1u;
+    int ax = b - (b/D)*D;
+    if(ax == 0){ x0 = (x0 << 1) | bit; }
+    else if(ax == 1){ x1 = (x1 << 1) | bit; }
+    else { x2 = (x2 << 1) | bit; }
+  }
+  if(morton){ return uvec3(x0, x1, x2); }  /* Z-order: stop at de-interleave */
+  /* Step 2: Gray decode */
+  uint t;
+  if(D == 3){ t = x2 >> 1; x2 ^= x1; x1 ^= x0; x0 ^= t; }
+  else      { t = x1 >> 1; x1 ^= x0; x0 ^= t; }
+  /* Step 3: undo excess work; i-loop unrolled i = D-1 down to 0 */
+  uint Q = 2u;
+  uint top = 1u << uint(ord);
+  for(int k = 0; k < 7; k++){
+    if(Q == top) break;
+    uint M = Q - 1u;
+    if(D == 3){
+      if((x2 & Q) != 0u){ x0 ^= M; } else { t = (x0 ^ x2) & M; x0 ^= t; x2 ^= t; }
+    }
+    if((x1 & Q) != 0u){ x0 ^= M; } else { t = (x0 ^ x1) & M; x0 ^= t; x1 ^= t; }
+    if((x0 & Q) != 0u){ x0 ^= M; }         /* i = 0: self-exchange is a no-op */
+    Q <<= 1;
+  }
+  return uvec3(x0, x1, x2);
+}
+vec3 shape_hilbert(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int D   = (P[0] > 2.5) ? 3 : 2;
+  int ord = int(P[1] + 0.5);
+  if(ord < 1) ord = 1;
+  if(D == 3 && ord > 6) ord = 6;           /* 8^6 cells is the 3D ceiling */
+  bool morton = P[2] > 0.5;
+  uint cells = 1u << uint(D*ord);          /* <= 262144, exact in float */
+  uint n = uint(q.x * float(cells - 1u));
+  n = min(n, cells - 2u);
+  uvec3 ca = hilbert_decode(n,      D, ord, morton);
+  uvec3 cb = hilbert_decode(n + 1u, D, ord, morton);
+  float s = 2.4 / float(1u << uint(ord));  /* world edge of one cell */
+  vec3 a; vec3 b;
+  if(D == 3){
+    a = (vec3(ca) + 0.5)*s - 1.2;
+    b = (vec3(cb) + 0.5)*s - 1.2;
+  } else {
+    vec2 fa = (vec2(ca.xy) + 0.5)*s - 1.2;
+    vec2 fb = (vec2(cb.xy) + 0.5)*s - 1.2;
+    a = vec3(fa.x, 0.0, fa.y);
+    b = vec3(fb.x, 0.0, fb.y);
+  }
+  vec3 p = mix(a, b, q.y);                 /* one spot on one segment */
+  p += (rnd.xyz - 0.5) * (2.0*s*P[3]);     /* TUBE: at 1.0 the thread fogs
+                                              into the whole cell lattice */
+  float along = (float(n) + q.y) / float(cells - 1u);
+  col = pal(along*P[4] - uT*0.02, vec3(0.52, 0.46, 0.42), vec3(0.48, 0.42, 0.38),
+            vec3(1.0, 1.0, 1.0), vec3(0.00, 0.25, 0.50));
+  col *= 0.5 + 0.7*P[5];
+  return p;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/47-hyper.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "hyper",
+  name: "The Hyperbolic Plane",
+  roman: "XLVII",
+  accent: "#90b8f0",
+  tex: "\\{p,q\\}:\\;(p\\!-\\!2)(q\\!-\\!2)>4,\\qquad z\\mapsto\\bar z,\\quad e^{2\\pi i/p}\\,\\bar z,\\quad c+\\dfrac{r^{2}(z-c)}{|z-c|^{2}}",
+  plain: "{p,q}: (p−2)(q−2) > 4;   mirrors z ↦ z̄,  e^(2πi/p)·z̄,  c + r²(z−c)/|z−c|²",
+  caption: "The plane of Bolyai and Lobachevsky, tiled by regular P-gons meeting Q to a vertex — hyperbolic exactly when (p−2)(q−2) > 4. Each point is born on one edge of the fundamental polygon and pushed through a random word of the three generating mirrors, WORD LENGTH reflections deep; COLOR tints the generations into rings. The crowding at the rim is not perspective: the disk keeps angles true but compresses area, and hyperbolic circles grow exponentially with radius, so congruent tiles must pile against the boundary — the brightness gradient is the metric itself, the crowding Escher drew in Circle Limit from Coxeter's figure. MODEL lifts the disk onto the hyperboloid model.",
+  cam: { dist: 2.9, pitch: 0.55, tgtY: 0.0, rot: 0.03 },
+  gain: 0.85,
+  params: [
+    { label: "P",           min: 3, max: 8,  step: 1,    def: 5    },
+    { label: "Q",           min: 3, max: 8,  step: 1,    def: 4    },
+    { label: "WORD LENGTH", min: 2, max: 24, step: 1,    def: 12   },
+    { label: "MODEL",       min: 0, max: 1,  step: 0.01, def: 0.0  },
+    { label: "COLOR",       min: 0, max: 1,  step: 0.01, def: 0.55 },
+    { label: "GLOW",        min: 0, max: 1,  step: 0.01, def: 0.6  }
+  ],
+  glsl: `
+vec3 shape_hyper(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  /* {p,q} tiling of the Poincare disk, generated by its mirror group */
+  int np = int(P[0] + 0.5); np = max(3, min(8, np));
+  int nq = int(P[1] + 0.5); nq = max(3, min(8, nq));
+  float sp = sin(PI/float(np));
+  float cq = cos(PI/float(nq));
+  for(int i = 0; i < 8; i++){       /* spherical/Euclidean combo: raise q until hyperbolic */
+    if(cq*cq - sp*sp > 1.0e-4) break;
+    nq += 1;
+    cq = cos(PI/float(nq));
+  }
+  float root = sqrt(max(cq*cq - sp*sp, 1.0e-6));
+  float d = cq/root;                /* mirror-arc center; d*d - r*r = 1 exactly, */
+  float r = sp/root;                /* so the arc meets the unit circle at right angles */
+  vec2  c = vec2(d, 0.0);
+  float wedge = PI/float(np);
+
+  /* draw from the polygon edge: the sub-arc between the two vertices,
+     found where the wedge boundary line at angle pi/p cuts the circle */
+  float cw = cos(wedge);
+  float tv = d*cw - sqrt(max(d*d*cw*cw - 1.0, 0.0));   /* vertex radius */
+  float cpsiv = clamp((d - tv*cw)/max(r, 1.0e-9), -1.0, 1.0);
+  float psiv = acos(cpsiv);
+  float psi = (q.x - 0.5)*2.0*psiv;
+  vec2 z = c - r*vec2(cos(psi), sin(psi));
+  if(abs(atan(z.y, z.x)) > wedge || dot(z, z) >= 1.0){ /* numerical guard */
+    col = vec3(0.0);
+    return vec3(0.0, -999.0, 0.0);
+  }
+
+  /* random word in the three mirrors, never repeating the last one */
+  int wlen = int(P[2] + 0.5); wlen = max(2, min(24, wlen));
+  int klen = int(rnd.w*float(wlen));                   /* 0 .. wlen-1 generations */
+  uint h = seed;
+  int lastM = 0;
+  vec2 R = vec2(cos(TAU/float(np)), sin(TAU/float(np)));
+  for(int j = 0; j < 24; j++){
+    if(j >= klen) break;
+    h = hashu(h);
+    int m = 0;
+    if(lastM == 0){ m = 1 + int(u2f(h)*2.99999); }
+    else if(lastM == 1){ m = ((h & 1u) == 0u) ? 2 : 3; }
+    else if(lastM == 2){ m = ((h & 1u) == 0u) ? 1 : 3; }
+    else               { m = ((h & 1u) == 0u) ? 1 : 2; }
+    if(m == 1){ z = vec2(z.x, -z.y); }                 /* reflect in the x-axis */
+    else if(m == 2){ z = cmul(R, vec2(z.x, -z.y)); }   /* reflect in the line at pi/p */
+    else{                                              /* invert in the edge arc */
+      vec2 wv = z - c;
+      z = c + r*r*wv/(dot(wv, wv) + 1.0e-9);
+    }
+    float zz = dot(z, z);
+    if(zz > 0.998001){ z *= 0.999*inversesqrt(zz); }   /* float-drift clamp */
+    lastM = m;
+  }
+
+  /* gentle intrinsic motion: a small Mobius automorphism of the disk is an
+     isometry, so the whole tiling slides rigidly under it */
+  vec2 aa = 0.05*vec2(cos(uT*0.10), sin(uT*0.073));
+  z = cdiv(z + aa, vec2(1.0, 0.0) + cmul(vec2(aa.x, -aa.y), z));
+  float zz2 = dot(z, z);
+  if(zz2 > 0.998001){ z *= 0.999*inversesqrt(zz2); }
+
+  /* disk model flat in xz  ->  hyperboloid lift */
+  float mdl = clamp(P[3], 0.0, 1.0);
+  float s2 = dot(z, z);
+  if(mdl > 0.001 && s2 > 0.970225){  /* |z| > 0.985 lifts far outside the frame */
+    col = vec3(0.0);
+    return vec3(0.0, -999.0, 0.0);
+  }
+  vec3 diskP = vec3(z.x, 0.0, z.y)*1.2;
+  float den = max(1.0 - s2, 1.0e-4);
+  vec3 hypP = vec3(0.6*z.x/den, 0.3*(1.0 + s2)/den - 0.45, 0.6*z.y/den);
+  vec3 pos = mix(diskP, hypP, mdl);
+
+  col = pal(float(klen)/float(wlen)*0.85 + P[4],
+            vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col *= 0.5 + 0.7*P[5];
+  return pos;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/48-swallow.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "swallow",
+  name: "The Catastrophe Machines",
+  roman: "XLVIII",
+  accent: "#f09890",
+  tex: "V=x^{4}+ax^{2}+bx,\\;\\{V'=0\\};\\qquad b=-4x^{3}-2ax,\\;\\;c=3x^{4}+ax^{2}",
+  plain: "V = x⁴+ax²+bx, {V′=0};   b = −4x³−2ax,  c = 3x⁴+ax²",
+  caption: "Thom's list: with at most four control parameters, a smooth potential admits exactly seven elementary catastrophes. FORM shows three. The cusp is the pleated equilibrium sheet of x⁴+ax²+bx — crossing the pleat forces the state to jump between folds, and STABILITY TINT dims the unstable sheet that mediates the jump: hysteresis made visible. The swallowtail is the quartic's double-root set; the elliptic umbilic, a three-cusped pillow. Nothing here traces their ridges — the parametrization's Jacobian collapses on them, so uniform sampling piles density onto the singular edges and the skeleton draws itself: brightness is measure. SECTION cuts down to the classic plane figures, among them the curve of Dalí's last painting.",
+  cam: { dist: 3.3, pitch: 0.3, tgtY: 0.0, rot: 0.045 },
+  gain: 0.9,
+  params: [
+    { label: "FORM",           min: 0,   max: 2,   step: 1,    def: 1    },
+    { label: "SPREAD",         min: 0.5, max: 1.6, step: 0.01, def: 1.0  },
+    { label: "SECTION",        min: 0,   max: 1,   step: 0.01, def: 0.0  },
+    { label: "STABILITY TINT", min: 0,   max: 1,   step: 0.01, def: 0.75 },
+    { label: "SCALE",          min: 0.5, max: 1.5, step: 0.01, def: 1.0  },
+    { label: "GLOW",           min: 0,   max: 1,   step: 0.01, def: 0.5  }
+  ],
+  glsl: `
+vec3 shape_swallow(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int form     = int(P[0] + 0.5);
+  float spread = P[1];
+  float sect   = P[2];
+  float tint   = clamp(P[3], 0.0, 1.0);
+  float scl    = P[4];
+  float glow   = P[5];
+
+  vec3 world;
+  float a;             /* the unfolding depth coordinate swept by SECTION */
+  float aMin, aMax;
+  float uns;           /* 1.0 on the slate-tinted (degenerate/unstable) sheet */
+  float hilite = 0.0;
+
+  if(form == 2){
+    /* Elliptic umbilic D4-:  V = x^3 - 3xy^2 + a(x^2+y^2) + bx + cy.
+       V_x = 3x^2 - 3y^2 + 2ax + b = 0   ->   b = 3y^2 - 3x^2 - 2ax
+       V_y = -6xy + 2ay + c        = 0   ->   c = 6xy - 2ay
+       V_xx = 6x + 2a,  V_yy = -6x + 2a,  V_xy = -6y
+       det Hess = (6x+2a)(-6x+2a) - 36y^2 = 4a^2 - 36(x^2+y^2)
+       det = 0   ->   a = +-3*sqrt(x^2+y^2).   (Signs checked three times.)
+       With x = r cos t, y = r sin t the section at fixed a is an exact
+       deltoid, b = -3r^2(cos 2t + 2 cos t), c = 3r^2(sin 2t - 2 sin t);
+       its speed vanishes at the three cusps, so uniform sampling piles
+       density onto the cusp ridges of the pillow by itself. */
+    float R  = 0.8*spread;
+    float r  = R*sqrt(q.x);          /* area-uniform disk */
+    float th = TAU*q.y;
+    float x  = r*cos(th), y = r*sin(th);
+    float sg = (rnd.z < 0.5) ? -1.0 : 1.0;
+    a = sg*3.0*r;
+    float b = 3.0*y*y - 3.0*x*x - 2.0*a*x;
+    float c = 6.0*x*y - 2.0*a*y;
+    world = vec3(b*0.35, a*0.35, c*0.35);
+    aMin = -3.0*R; aMax = 3.0*R;
+    /* tr Hess = 4a is the eigenvalue surviving on det Hess = 0:
+       the two cones of the pillow are tinted by its sign */
+    uns = (a < 0.0) ? 1.0 : 0.0;
+  } else {
+    float x = mix(-1.0, 1.0, q.x)*spread;
+    a = mix(-2.0, 1.0, q.y)*spread;
+    aMin = -2.0*spread; aMax = spread;
+    float b = -4.0*x*x*x - 2.0*a*x;        /* V' = 4x^3 + 2ax + b = 0 */
+    if(form == 1){
+      /* Swallowtail A4: x is a double root of x^4 + ax^2 + bx + c, so
+         b = -4x^3 - 2ax (derivative) and c = 3x^4 + ax^2 (back-substitute).
+         The x-tangent of the surface map is (12x^2 + 2a)*(0, ...): the
+         Jacobian degenerates exactly on the two cusp ridges, so uniform
+         (x,a) sampling brightens the skeleton with no edge detection.
+         Extremes at SPREAD 1: b in [-6,6], c in [-1/3,4]; outliers past
+         1.45 world units are clamp-hidden below. */
+      float c = 3.0*x*x*x*x + a*x*x;
+      world = vec3(a*0.55, c*0.45 - 0.3, b*0.22);
+      uns = (12.0*x*x + 2.0*a < 0.0) ? 1.0 : 0.0;  /* pocket between ridges */
+    } else {
+      /* Cusp A3: equilibrium sheet of V = x^4 + ax^2 + bx.
+         V'' = 12x^2 + 2a < 0 is the overhanging middle sheet: crossing a
+         fold with V'' = 0 forces the state to jump - hysteresis. */
+      world = vec3(a*0.55, x*0.8, b*0.28);
+      uns = (12.0*x*x + 2.0*a < 0.0) ? 1.0 : 0.0;
+      /* Zeeman's machine: the control b sweeps back and forth, and the
+         equilibria available at the current control glow gently */
+      float bs = 1.1*spread*sin(uT*0.35);
+      float dd = (b - bs)/(0.22*spread + 1.0e-3);
+      hilite = 0.4*exp(-dd*dd);
+    }
+  }
+
+  /* SECTION: hide points past a threshold sweeping down the a-axis;
+     at 1 a thin slab remains - the classic 2D section (fold pair,
+     dovetail curve, three-cusped star) */
+  float thresh = mix(aMax, aMin + 0.06*(aMax - aMin), clamp(sect, 0.0, 1.0));
+  if(a > thresh){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+  vec3 w = world*scl;
+  if(any(greaterThan(abs(w), vec3(1.45)))){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+  vec3 ivory = vec3(1.02, 0.92, 0.74);   /* stable: warm ivory */
+  vec3 slate = vec3(0.26, 0.31, 0.42);   /* unstable: dim slate */
+  col = mix(ivory, slate, uns*tint);
+  col *= (0.35 + 0.85*glow)*(1.0 + hilite);
+  return w;
+}`
+});
+
+</script>
 
 <!-- core: engine -->
 <script>
