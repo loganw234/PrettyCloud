@@ -151,6 +151,33 @@ Atlas.UI = (function () {
     });
   }
 
+  /* ————— shot export: everything the darkroom needs to reproduce
+     the current view as a print (see the atlas-darkroom repo) ————— */
+  function exportShot(S) {
+    const i = S.modeB;
+    const p = Atlas.plates[i];
+    const cam = Atlas.Camera.state;
+    const levers = {};
+    p.params.forEach((prm, k) => { levers[prm.label] = +Atlas.values[i][k]; });
+    const shot = {
+      app: "atlas-shot", version: 1,
+      plate: i + 1, id: p.id, roman: p.roman, name: p.name,
+      levers,
+      camera: { yaw: +cam.yaw.toFixed(4), pitch: +cam.pitch.toFixed(4),
+                dist: +cam.dist.toFixed(4), tgtY: +cam.tgtY.toFixed(4),
+                fovDeg: S.fovDeg },
+      simT: +S.simT.toFixed(3),
+      grade: { gamma: S.gamma, hue: S.hue, sat: S.sat, exposure: S.exposure }
+    };
+    const blob = new Blob([JSON.stringify(shot, null, 1)],
+                          { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "atlas-shot-" + p.roman.toLowerCase() + ".json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
   /* ————— telemetry ————— */
   function sci(n) {
     if (!isFinite(n) || n <= 0) return "\u2013";
@@ -182,6 +209,7 @@ Atlas.UI = (function () {
       $("resetP").addEventListener("click", () => resetPlate(S.modeB));
       $("pause").addEventListener("click", () => hooks.togglePause());
       $("shot").addEventListener("click", () => hooks.exportPNG());
+      $("shotJson").addEventListener("click", () => exportShot(S));
 
       buildGlobalPanel(S);
       applyPlateText(0);
