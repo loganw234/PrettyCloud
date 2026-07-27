@@ -308,10 +308,16 @@ globalThis.Atlas = {
 
   GLSL: {}, /* filled by glsl-lib.js */
 
-  buildVertexShader() {
-    const shapes = this.plates.map(p => p.glsl).join("\n");
-    const dispatch = this.plates
-      .map((p, i) => `  if(m == ${i}) return shape_${p.id}(q, rnd, seed, P, col);`)
+  /* Build a vertex shader containing ONLY the given plate indices.
+     One shader per active morph pair, not one ubershader: D3D's HLSL
+     compiler (stock Chrome on Windows) grows super-quadratically in
+     total program size and aborts entirely past ~50 plates. A 2-plate
+     program compiles in well under a second and is cached. */
+  buildVertexShaderFor(indices) {
+    const uniq = [...new Set(indices)];
+    const shapes = uniq.map(i => this.plates[i].glsl).join("\n");
+    const dispatch = uniq
+      .map(i => `  if(m == ${i}) return shape_${this.plates[i].id}(q, rnd, seed, P, col);`)
       .join("\n");
     return (
       this.GLSL.vertHeader +
@@ -4050,6 +4056,1473 @@ vec3 shape_swallow(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
 });
 
 </script>
+<script>
+/* ── js/plates/49-diffract.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "diffract",
+  name: "Diffraction, Grain by Grain",
+  roman: "XLIX",
+  accent: "#9fd4ff",
+  tex: "I(\\theta)\\propto\\operatorname{sinc}^{2}\\!\\left(\\frac{\\pi a\\sin\\theta}{\\lambda}\\right)\\left[\\frac{\\sin\\!\\left(N\\pi d\\sin\\theta/\\lambda\\right)}{N\\sin\\!\\left(\\pi d\\sin\\theta/\\lambda\\right)}\\right]^{2},\\qquad I_{\\mathrm{Airy}}=\\left[\\frac{2J_{1}(x)}{x}\\right]^{2}",
+  plain: "I(θ) ∝ sinc²(πa·sinθ/λ) · [sin(Nπd·sinθ/λ) / (N·sin(πd·sinθ/λ))]²,   Airy: [2J₁(x)/x]²",
+  caption: "Each point is one photon landing on the screen with probability equal to the diffracted intensity, so brightness here is the Born rule: |amplitude|² estimated by counting arrivals — G. I. Taylor's feeble-light exposures of 1909 found the fringes just as sharp when the photons arrived one at a time. APERTURE runs from one slit to two, to a grating of N SLITS, to a round hole of radius SLIT WIDTH whose first dark Airy ring is Rayleigh's sin θ = 1.22 λ/D; those four are Fraunhofer, the far field. The fifth is Fresnel's near field: an opaque disk, with Poisson's absurdity at the centre of its shadow, as bright as the open beam, exactly as Arago found in 1818 — FRESNEL N counts the zones the disk covers. SLIT WIDTH and SPACING are in wavelengths, so WAVELENGTH only recolours; its default 633 nm is the helium-neon line at 632.8. Raise TRAILS and the fringes assemble grain by grain.",
+  cam: { dist: 2.5, pitch: 0.12, tgtY: 0.0, rot: 0.04 },
+  gain: 0.95,
+  params: [
+    { label: "APERTURE",   min: 0,   max: 4,   step: 1,    def: 1   },
+    { label: "SLIT WIDTH", min: 1,   max: 12,  step: 0.1,  def: 4   },
+    { label: "SPACING",    min: 2,   max: 30,  step: 0.1,  def: 12  },
+    { label: "N SLITS",    min: 2,   max: 8,   step: 1,    def: 5   },
+    { label: "WAVELENGTH", min: 400, max: 700, step: 1,    def: 633 },
+    { label: "FRESNEL N",  min: 0.5, max: 4,   step: 0.05, def: 2   },
+    { label: "GLOW",       min: 0,   max: 1,   step: 0.01, def: 0.5 }
+  ],
+  glsl: `
+/* spectral tint, 400 nm (violet) .. 700 nm (red). Each channel is a sum or
+   product of smoothsteps, so it never goes negative; the result is then
+   normalised and mixed toward white so WAVELENGTH changes hue, not exposure. */
+vec3 diffract_wl2rgb(float lam){
+  float t = clamp((lam - 400.0)/300.0, 0.0, 1.0);
+  float r = smoothstep(0.42, 0.65, t) + 0.28*(1.0 - smoothstep(0.0, 0.20, t));
+  float g = smoothstep(0.12, 0.38, t)*(1.0 - smoothstep(0.58, 0.86, t));
+  float b = 1.0 - smoothstep(0.24, 0.50, t);
+  vec3 c = vec3(r, g, b);
+  c /= max(max(c.r, max(c.g, c.b)), 0.30);
+  return mix(vec3(1.0), c, 0.85);
+}
+
+/* sinc^2 with the removable singularity handled: (sin x)/x -> 1 at x = 0 */
+float diffract_sinc2(float x){
+  float d = (abs(x) < 1.0e-3) ? 1.0 : x;    /* divisor is never zero, so even a
+                                               compiler that evaluates both arms
+                                               of the select cannot make a NaN */
+  float s = (abs(x) < 1.0e-3) ? (1.0 - x*x/6.0) : sin(x)/d;
+  return s*s;
+}
+
+/* N-slit array factor [sin(N psi)/(N sin psi)]^2 with psi = pi d sin(theta)/lambda.
+   Where sin psi = 0 numerator and denominator vanish together and the limit is
+   exactly 1 -- those are the principal maxima at d sin(theta) = m lambda, so the
+   guard returns 1 rather than dividing. This factor already IS the interference
+   term: at N = 2 it collapses to cos^2(psi), the textbook double slit, and no
+   extra cosine is applied on top of it.
+   psi is folded into [-pi/2, pi/2] first. The factor has period pi exactly --
+   psi -> psi + pi flips the sign of both sines and the ratio is squared -- so
+   the fold changes nothing mathematically; it is here because at SPACING 30 the
+   raw argument N*psi reaches 226 radians, and GLSL ES only specifies sin() to
+   2^-11 inside [-pi, pi]. After the fold the largest argument is 8*(pi/2), so
+   the 1e-4 guard sits far above any argument-reduction error rather than
+   alongside it. */
+float diffract_af(float N, float psi){
+  float p  = psi - PI*floor(psi/PI + 0.5);
+  float sp = sin(p);
+  if(abs(sp) < 1.0e-4) return 1.0;
+  float r = sin(N*p)/(N*sp);
+  return r*r;
+}
+
+/* J0: eleven-term power series below x = 5 (term ratio -y/(k+1)^2, y = x^2/4;
+   the last term is 7e-6 there), Hankel asymptotic above, carried to the first
+   correction: J0 ~ sqrt(2/(pi x))[cos(chi) + sin(chi)/(8x)], chi = x - pi/4.
+   The leading term on its own is 4 percent low right at the join, which would
+   put a visible step into the Arago integrand below; with the 1/(8x) term the
+   worst absolute error over 5 <= x <= 95 is 6e-4 and the step at the join is
+   under 0.4 percent. Checked against a series/Hankel reference. */
+float diffract_J0(float x){
+  float ax = abs(x);
+  if(ax < 5.0){
+    float y = 0.25*ax*ax;
+    float term = 1.0;
+    float s = 1.0;
+    for(int k = 0; k < 10; k++){
+      float kf = float(k) + 1.0;
+      term = -term*y/(kf*kf);
+      s += term;
+    }
+    return s;
+  }
+  float chi = ax - 0.25*PI;
+  return sqrt(2.0/(PI*ax))*(cos(chi) + sin(chi)/(8.0*ax));
+}
+
+/* J1: eleven-term series below x = 8 built from term(k+1) = -term(k)*(x^2/4)
+   /((k+1)(k+2)) starting at x/2, and above it the Hankel asymptotic carried to
+   the first correction, J1 ~ sqrt(2/(pi x))[cos(chi) - 3 sin(chi)/(8x)] with
+   chi = x - 3pi/4. Verified against the first zero: the series returns
+   J1(3.83171) = -2e-6, and that zero is what fixes the first dark Airy ring.
+   The series is the weaker branch by the time it reaches x = 8 (1.4 percent);
+   the corrected asymptotic holds 4e-4 absolute out to x = 22.6, which is the
+   largest argument SLIT WIDTH 12 can reach, where the bare leading term was
+   9e-3 out and filled the outer dark rings in. J1 is odd, so the sign is
+   restored at the end. */
+float diffract_J1(float x){
+  float ax = abs(x);
+  float r;
+  if(ax < 8.0){
+    float y = 0.25*ax*ax;
+    float term = 0.5*ax;
+    r = term;
+    for(int k = 0; k < 10; k++){
+      float kf = float(k);
+      term = -term*y/((kf + 1.0)*(kf + 2.0));
+      r += term;
+    }
+  } else {
+    float chi = ax - 0.75*PI;
+    r = sqrt(2.0/(PI*ax))*(cos(chi) - 3.0*sin(chi)/(8.0*ax));
+  }
+  return (x < 0.0) ? -r : r;
+}
+
+/* POISSON-ARAGO. Fresnel field behind an opaque disk of radius A, at screen
+   radius w, written in the disk's own units: sigma = rho/A, W = w/A, and the
+   Fresnel number NF = A^2/(lambda z), so kappa A^2/2 = pi NF and kappa A w
+   = 2 pi NF W. Substituting t = sigma^2 (rho drho = (A^2/2) dt) makes the
+   quadratic phase exactly linear in t, which matters: the midpoint rule's
+   leading error against a linear phase is then a single global scale factor
+   (1 - (pi NF dt)^2/24) rather than a distortion.
+   The outer limit is set by a fixed phase budget PHI rather than a fixed
+   radius. A zone is pi of phase here -- the disk edge sits at pi NF, which is
+   what makes NF the zone count -- so the beam always reaches PHI/pi = 19 zones
+   past the rim however small NF is, and the step is a constant 0.375 rad of
+   phase, advanced by one complex rotation per step instead of a sin/cos.
+   The illuminating beam is apodized by g = (1 - s^4)^2, s = (t-1)/(T-1): g and
+   g' both vanish at the outer limit, so the truncation does not ring, while
+   g(1) = 1 leaves the disk edge untouched.
+   Check on axis: W = 0 makes J0 = 1 and integration by parts collapses the
+   integral to its lower endpoint, |E| = g(1)/(2 pi NF) -- exactly the
+   unobstructed amplitude. So the normalisation below must return I(0) = 1,
+   and it does, to 0.4 percent for every NF in range: the spot at the centre
+   of the shadow really is as bright as the open beam. */
+float diffract_arago(float W, float NF){
+  const float PHI = 60.0;                  /* total phase across the beam */
+  float T   = 1.0 + PHI/(PI*NF);           /* (rho_max/A)^2 */
+  float dt  = (T - 1.0)/160.0;
+  float dph = PHI/160.0;                   /* = PI*NF*dt by construction */
+  vec2 rot = vec2(cos(dph), sin(dph));
+  float p0 = PI*NF*(1.0 + 0.5*dt);
+  vec2 ph  = vec2(cos(p0), sin(p0));
+  vec2 E = vec2(0.0);
+  for(int j = 0; j < 160; j++){
+    float t   = 1.0 + (float(j) + 0.5)*dt;
+    float sfr = (t - 1.0)/(T - 1.0);
+    float s4  = sfr*sfr; s4 = s4*s4;
+    float g   = 1.0 - s4; g = g*g;
+    float al  = TAU*NF*W*sqrt(max(t, 1.0e-6));
+    E += (g*diffract_J0(al))*ph;
+    ph = cmul(ph, rot);
+  }
+  E *= 0.5*dt;
+  float amp = length(E)*TAU*NF;
+  return amp*amp;
+}
+
+vec3 shape_diffract(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int   ap   = int(P[0] + 0.5);
+  float aw   = max(P[1], 0.05);            /* slit width a, in wavelengths */
+  float dsp  = max(P[2], 0.05);            /* slit spacing d, in wavelengths */
+  float NS   = max(float(int(P[3] + 0.5)), 2.0);
+  float NF   = max(P[5], 0.05);
+  float glow = P[6];
+  float lift = 0.35 + 0.9*glow;
+  vec3 tint  = diffract_wl2rgb(P[4]);
+
+  /* Fresh photons every frame. A Cranley-Patterson rotation of the R2 point
+     keeps the low-discrepancy stratification exactly but decorrelates one
+     frame from the next, so TRAILS integrates independent arrivals instead of
+     relighting the same ones -- that is what makes the pattern assemble. */
+  uint fh = hashu(uint(mod(max(uT, 0.0)*997.0, 16777216.0)) + 0x9e3779b9u);
+  vec2 qs = fract(q + vec2(u2f(fh), u2f(hashu(fh))));
+
+  /* ---- the aperture plane at z = -1: scenery, four percent of the points,
+     kept dim because it is decoration and not part of the measure ---- */
+  if(rnd.z < 0.04){
+    col = vec3(0.09, 0.12, 0.17)*lift;
+    if(ap >= 3){
+      float ang = qs.y*TAU;
+      float rad = (ap == 3) ? 0.30*(0.99 + 0.02*qs.x)   /* rim of the hole */
+                            : 0.30*sqrt(qs.x);          /* the opaque disk */
+      return vec3(rad*cos(ang), rad*sin(ang), -1.0);
+    }
+    float bx  = (qs.x - 0.5)*1.9;
+    float nn  = (ap == 0) ? 1.0 : ((ap == 1) ? 2.0 : NS);
+    float pit = 1.5/nn;
+    float hw  = (ap == 0) ? clamp(0.02*aw, 0.03, 0.28)
+                          : 0.5*pit*clamp(aw/dsp, 0.05, 0.6);
+    float jf  = floor(bx/pit + 0.5*(nn - 1.0) + 0.5);
+    float ctr = (jf - 0.5*(nn - 1.0))*pit;
+    if(jf >= 0.0 && jf <= nn - 1.0 && abs(bx - ctr) < hw){
+      col = vec3(0.0); return vec3(0.0, -999.0, 0.0);   /* an opening: no bar */
+    }
+    return vec3(bx, (qs.y - 0.5)*0.34, -1.0);
+  }
+
+  float L    = 1.30;      /* half-window on the screen, world units */
+  float umax = 0.30;      /* sin(theta) at the edge of that window */
+
+  /* ---- circular aperture and opaque disk: the screen pattern is 2D ---- */
+  if(ap >= 3){
+    /* the Arago spot narrows as 1/NF: the lower-endpoint term makes |E| follow
+       J0(2 pi NF W), so the first null sits near W = 0.383/NF, i.e. 0.33/NF in
+       world units (the minimum is shallow but lands at W = 0.19 against 0.191
+       predicted at NF = 2, and 0.095 against 0.096 at NF = 4; the fit loosens
+       below NF = 1, where the clamp has taken over anyway) -- so the Gaussian
+       branch tracks it */
+    float sg = (ap == 4) ? clamp(0.33/NF, 0.06, 0.50) : 0.26;
+    float rad;
+    if(rnd.x < 0.7) rad = L*sqrt(qs.x);                       /* uniform disk */
+    else            rad = sg*sqrt(-2.0*log(max(qs.x, 1.0e-7)));/* Rayleigh */
+    if(rad > L){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+    /* divide by the FULL mixture density, not one branch, or the wings lie */
+    float pdf = 0.7/(PI*L*L) + 0.3*exp(-0.5*rad*rad/(sg*sg))/(TAU*sg*sg);
+    float inten; float K;
+    if(ap == 3){
+      /* x = k R sin(theta) with R = aw wavelengths, i.e. D = 2 aw: the first
+         dark ring lands at x = 3.83171, sin(theta) = 1.22 lambda/D */
+      float x  = TAU*aw*umax*(rad/L);
+      float xs = max(x, 1.0e-6);
+      float rj = 2.0*diffract_J1(xs)/xs;
+      inten = (x < 1.0e-3) ? 1.0 : rj*rj;
+      K = 0.95;
+    } else {
+      inten = diffract_arago(1.5*rad/L, NF);
+      K = 0.45;
+    }
+    float ang = qs.y*TAU;
+    col = tint*(inten/max(pdf, 1.0e-6))*K*lift;
+    return vec3(rad*cos(ang), rad*sin(ang), 0.6);
+  }
+
+  /* ---- one slit, two slits, a grating: the pattern spreads along x ---- */
+  float sg = 0.22;
+  float s;
+  if(rnd.x < 0.7) s = (qs.x - 0.5)*2.0*L;
+  else            s = sg*sqrt(-2.0*log(max(qs.x, 1.0e-7)))*cos(TAU*rnd.y);
+  if(abs(s) > L){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  float pdf = 0.7/(2.0*L) + 0.3*exp(-0.5*s*s/(sg*sg))/(sg*sqrt(TAU));
+  float u = umax*s/L;                              /* u = sin(theta) */
+  float inten = diffract_sinc2(PI*aw*u);           /* the single-slit envelope */
+  if(ap == 1) inten *= diffract_af(2.0, PI*dsp*u); /* double slit = N = 2 */
+  if(ap == 2) inten *= diffract_af(NS,  PI*dsp*u);
+  col = tint*(inten/max(pdf, 1.0e-6))*0.28*lift;
+  return vec3(s, (qs.y - 0.5)*0.95, 0.6);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/50-wavecat.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "wavecat",
+  name: "Wave Catastrophes",
+  roman: "L",
+  accent: "#ffc287",
+  tex: "I(s)\\propto\\mathrm{Ai}^{2}(s),\\quad \\mathrm{Ai}(x)=c_{1}f(x)-c_{2}g(x);\\qquad P(X,Y)=\\int_{-\\infty}^{\\infty}\\!e^{\\,i\\left(t^{4}+Xt^{2}+Yt\\right)}\\,dt",
+  plain: "I(s) ∝ Ai²(s),  Ai(x) = c₁f(x) − c₂g(x);   P(X,Y) = ∫ e^{i(t⁴ + Xt² + Yt)} dt",
+  caption: "Ray optics makes a caustic infinitely bright; the wave field does not. Across a fold the intensity is Airy's function squared: fringes on the lit side, exponential darkness beyond, and the brightest fringe sitting a little inside the geometrical caustic itself, which is drawn here as a dim slate wire. FRINGE SCALE sets how much of the Airy coordinate is packed into that band. The first two forms are the fold and the cusp — A₂ and A₃, the foot of the same ADE ladder Plate XLVIII climbs — given back the wavelength that catastrophe theory throws away: FORM 1 is Pearcey's cusp integral, quadratured per point at QUALITY steps, with the cusp curve threaded through it. FORM 2 dresses Plate XXXIX's rainbow with the function Airy built for it in 1838: DROP SIZE widens the supernumeraries as drops grow finer, though the spacing here is exaggerated and coarse drops smear it away. Brightness is the intensity itself.",
+  cam: { dist: 3.0, pitch: 0.5, tgtY: 0.0, rot: 0.03 },
+  gain: 0.95,
+  params: [
+    { label: "FORM",         min: 0,   max: 2,   step: 1,    def: 0    },
+    { label: "FRINGE SCALE", min: 0.3, max: 3,   step: 0.01, def: 1.0  },
+    { label: "DROP SIZE",    min: 0.15, max: 3,  step: 0.01, def: 0.4  },
+    { label: "QUALITY",      min: 96,  max: 256, step: 8,    def: 160  },
+    { label: "TINT",         min: 0,   max: 1,   step: 0.01, def: 0.85 },
+    { label: "GLOW",         min: 0,   max: 1,   step: 0.01, def: 0.5  }
+  ],
+  glsl: `
+/* Ai(x) by its power series, Ai = c1*f - c2*g, with
+     f: a0 = 1, a_(k+1) = a_k * x^3/((3k+2)(3k+3))     -> f = 1 + x^3/6 + ...
+     g: b0 = x, b_(k+1) = b_k * x^3/((3k+3)(3k+4))     -> g = x + x^4/12 + ...
+     c1 = Ai(0)  = 3^(-2/3)/Gamma(2/3) = 0.3550280539
+     c2 = -Ai'(0)= 3^(-1/3)/Gamma(1/3) = 0.2588194038
+   Hand check at x = -2.338 (the first zero): f -> -0.36898, g -> -0.50645,
+   c1*f - c2*g = -0.13100 + 0.13108 = 8e-5. Good.
+   The series is used only on -7 < x < 3. Beyond that it is not the truncation
+   that fails but float32: the largest interior term reaches ~2e4 at x = -7 and
+   an order of magnitude more at x = -8, so cancelling down to |Ai| ~ 0.05 eats
+   the mantissa. The asymptotics take over instead, with their first correction
+   term (5/72z, harmless since the branch is only entered for z > 3.4), blended
+   over -7 < x < -6, where the asymptotic's own leading error (the 385/10368 z^-2
+   term it drops) is only ~1e-4 -- far below a visible seam:
+     x -> -inf : Ai ~ [sin(w) - (5/72z)cos(w)]/(sqrt(pi)|x|^(1/4)),
+                 z = (2/3)|x|^(3/2),  w = z + pi/4
+     x -> +inf : Ai ~ exp(-z)[1 - 5/72z]/(2 sqrt(pi) x^(1/4))                 */
+float wavecat_airy(float x){
+  float ax = max(abs(x), 1.0e-8);
+  float z  = 0.66666667*pow(ax, 1.5);
+  float am = 1.0/(1.77245385*pow(ax, 0.25));
+  float cq = 5.0/(72.0*max(z, 1.0e-3));
+  if(x >  3.0) return 0.5*am*exp(-min(z, 60.0))*(1.0 - cq);
+  if(x < -7.0) return am*(sin(z + 0.25*PI) - cq*cos(z + 0.25*PI));
+  float x3 = x*x*x;
+  float f = 1.0, af = 1.0;
+  float g = x,   bg = x;
+  for(int k = 0; k < 24; k++){
+    float kf = float(k);
+    af *= x3/((3.0*kf + 2.0)*(3.0*kf + 3.0)); f += af;
+    bg *= x3/((3.0*kf + 3.0)*(3.0*kf + 4.0)); g += bg;
+  }
+  float ser = 0.3550280539*f - 0.2588194038*g;
+  if(x > -6.0) return ser;
+  return mix(ser, am*(sin(z + 0.25*PI) - cq*cos(z + 0.25*PI)), -x - 6.0);
+}
+
+/* t = 0 (400 nm) .. 1 (700 nm); sums of smoothsteps, never negative */
+vec3 wavecat_wl2rgb(float t){
+  t = clamp(t, 0.0, 1.0);
+  float r = smoothstep(0.42, 0.66, t) + 0.26*(1.0 - smoothstep(0.0, 0.20, t));
+  float g = smoothstep(0.12, 0.40, t)*(1.0 - smoothstep(0.58, 0.90, t));
+  float b = 1.0 - smoothstep(0.24, 0.52, t);
+  return vec3(r, g, b);
+}
+
+vec3 shape_wavecat(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int   form = int(P[0] + 0.5);
+  float fs   = P[1];
+  float drop = max(P[2], 0.05);
+  float tint = clamp(P[4], 0.0, 1.0);
+  float gl   = 0.35 + 0.85*P[5];
+  vec3  warm = vec3(1.00, 0.76, 0.53);
+
+  /* the sampled window across the caustic, in Airy units: negative s is the
+     illuminated (two-ray) side, positive s the dark side. Ai^2 peaks at
+     s = -1.01879 with Ai = 0.53566, so 0.28693 normalizes the main lobe to 1. */
+  float sMin = -(3.0 + 7.0*fs);
+  float sMax =  1.0 + 2.0*fs;
+
+  if(form == 1){
+    /* -- THE CUSP (A3).  P(X,Y) = int exp(i(t^4 + X t^2 + Y t)) dt by direct
+       midpoint quadrature per point. The stationary points solve
+       4t^3 + 2Xt + Y = 0 and collide when 12t^2 + 2X = 0, i.e. X = -6t^2,
+       Y = 8t^3: that parametrization is drawn as a wire rather than
+       eliminating t. Truncation T is tied to the step count so the fastest
+       phase advance 8T^4/N stays near 2.2 rad -- below Nyquist -- and the
+       window exp(-(t/T)^8) removes the truncation ringing. Raise QUALITY
+       when FRINGE SCALE is high; the far corners then need larger |t|. */
+    float ps = 0.65 + 0.35*fs;                 /* window scale 0.755 .. 1.70 */
+    float sz = 1.30/(4.75*ps);
+    float sy = 1.30/(6.50*ps);
+    float X, Y;
+    if(u2f(hashu(seed ^ 0x9e37u)) < 0.03){
+      float t = mix(-1.15, 1.15, q.x);
+      X = -6.0*t*t;
+      Y =  8.0*t*t*t;
+      col = vec3(0.62, 0.78, 1.00)*0.055*gl;
+    } else {
+      X = mix(-6.5, 3.0, q.x)*ps;
+      Y = mix(-6.5, 6.5, q.y)*ps;
+      int   NS = clamp(int(P[3] + 0.5), 8, 256);
+      float fN = float(NS);
+      float T  = clamp(pow(0.275*fN, 0.25), 2.0, 3.2);
+      float dt = 2.0*T/fN;
+      float T2 = T*T;
+      float sr = 0.0, si = 0.0;
+      for(int it = 0; it < 256; it++){
+        if(it >= NS) break;
+        float t  = -T + (float(it) + 0.5)*dt;
+        float t2 = t*t;
+        float ph = t2*t2 + X*t2 + Y*t;
+        float r4 = (t2/T2)*(t2/T2);
+        float wn = exp(-r4*r4);                /* (t/T)^8 */
+        sr += wn*cos(ph);
+        si += wn*sin(ph);
+      }
+      sr *= dt; si *= dt;
+      float Ip = (sr*sr + si*si)/3.29;         /* |P(0,0)|^2 = 4*Gamma(5/4)^2 = 3.2863 */
+      /* the field's one hot spot is the cusp focus, |P| = 2.647 at X = -2.195,
+         Y = 0, i.e. Ip = 2.13 raw; this holds the peak near 1.08 so this form's
+         brightest point stays inside budget even at GLOW = 1 */
+      Ip = Ip/(1.0 + 0.46*Ip);
+      col = mix(vec3(0.85, 0.50, 0.26), vec3(1.02, 0.86, 0.66), clamp(Ip, 0.0, 1.0))
+            *Ip*gl*1.05;
+    }
+    /* the field fills exactly +-1.30 in both axes; the wire is parametrized in
+       (X,Y) rather than in q, so it is the only thing this clip ever cuts --
+       it stops the cusp arms at the frame instead of past the sampled field */
+    vec3 wp = vec3(Y*sy, 0.0, (X + 1.75*ps)*sz);
+    if(abs(wp.x) > 1.305 || abs(wp.z) > 1.305){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+    return wp;
+  }
+
+  if(form == 2){
+    /* -- THE RAINBOW, DRESSED.  Descartes' k = 1 bow: b_R^2 = (4-n^2)/3, and
+       theta_R = pi - D = 4t - 2i with sin i = b_R, sin t = b_R/n. At the mean
+       index 1.3375 that is 0.72306 rad = 41.43 deg; the Cauchy fit
+       n = 1.3247 + 3088.5/lambda^2 spreads it from 0.70694 (400 nm, 40.51 deg)
+       to 0.73949 (700 nm, 42.37 deg), a 1.86 deg bow. Rays exist only inside
+       theta_R -- the deviation D is stationary there, a minimum -- so the
+       Airy variable s = (theta - theta_R)/w is negative there: the
+       supernumeraries lie inside the primary, Alexander's band outside.
+       The angular width w scales as (lambda/a)^(2/3) -- fine drops, wide
+       fringes. The radial direction is magnified to fit the frame, so the
+       fringe-to-colour ratio is honest but the angles are not. */
+    float lt  = rnd.x;
+    float lam = mix(400.0, 700.0, lt);
+    float nr  = 1.3247 + 3088.5/(lam*lam);
+    float bR  = sqrt(max((4.0 - nr*nr)/3.0, 1.0e-6));
+    float i0  = asin(clamp(bR,      0.0, 0.999999));
+    float t0  = asin(clamp(bR/nr,   0.0, 0.999999));
+    float thR = 4.0*t0 - 2.0*i0;
+    float wRf = 0.0044*pow(1.0/drop, 0.66666667);
+    float cw  = pow(lam/600.0, 0.66666667);   /* 0.763 (400nm) .. 1.108 (700nm) */
+    float wA  = wRf*cw;
+    float s   = mix(sMin, sMax, q.y);
+    float th  = thR + s*wA;
+    float lo  = 0.70694 + sMin*wRf*1.12;
+    float hi  = 0.73949 + sMax*wRf*1.12;
+    float M   = 0.84/max(hi - lo, 1.0e-3);
+    float rho = 0.97 + M*(th - 0.5*(lo + hi));
+    float phi = mix(-1.05, 1.05, q.x);
+    float ai  = wavecat_airy(s);
+    float I2  = ai*ai/0.28693;
+    float p0  = 1.0*sin(0.22*uT);
+    float swp = 0.30*exp(-(phi - p0)*(phi - p0)/0.03);
+    /* two measure factors, both needed for brightness to stay an intensity.
+       rho: sampling is uniform in (phi, rho), so density per unit area carries
+       a 1/rho. cw: each wavelength is sampled uniformly in its own s, so it is
+       smeared over a radial band of width proportional to wA = wRf*cw. Red's
+       band is 1.45x wider than violet's, so uniform-in-s sampling thins it by
+       exactly that factor; cw puts it back, or the bow reads too blue. */
+    col = mix(warm, wavecat_wl2rgb(lt), tint)*I2*rho*cw*0.66*gl*(1.0 + swp);
+    vec3 wp = vec3(rho*sin(phi), (rnd.y - 0.5)*0.05, rho*cos(phi) - 0.83);
+    if(any(greaterThan(abs(wp), vec3(1.48)))){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+    return wp;
+  }
+
+  /* -- THE FOLD (A2).  A shallow arc C(u) = (1.2u, 0.42u^2) stands in for the
+     caustic; the light lies on its concave side. Points are laid on the normal
+     offset C(u) + n N(u), uniformly in the Airy coordinate s = -n/nsc, and
+     weighted by Ai(s)^2 -- so the geometrical line (slate wire) is NOT the
+     brightest place: the main lobe sits at s = -1.019, a little inside it.
+     The offset map has Jacobian |C'|(1 - kappa n) with kappa = 1.008/|C'|^3
+     <= 0.583, radius of curvature 1.71 > the 0.95 the offset ever reaches, so
+     it never folds; the factor is carried so brightness stays a density. */
+  float u  = mix(-1.0, 1.0, q.x);
+  vec2  C  = vec2(1.20*u, 0.42*u*u);
+  vec2  dC = vec2(1.20, 0.84*u);
+  float sp = length(dC);
+  vec2  nv = vec2(-dC.y, dC.x)/max(sp, 1.0e-6);   /* +z at u = 0: concave side */
+  float kp = 1.008/(sp*sp*sp);
+  bool  wr = (u2f(hashu(seed ^ 0x5eedu)) < 0.02);
+  float s  = wr ? 0.0 : mix(sMin, sMax, q.y);
+  float nn = -s*(0.95/(3.0 + 7.0*fs));
+  float ai = wavecat_airy(s);
+  float I0 = ai*ai/0.28693;
+  float jc = sp*max(1.0 - kp*nn, 0.04);
+  float u0 = 1.05*sin(0.22*uT);
+  float sw = 0.30*exp(-(u - u0)*(u - u0)/0.03);
+  vec3  tn = wr ? vec3(0.42, 0.58, 0.88) : warm;
+  col = tn*(wr ? 0.10 : I0*jc*0.66)*gl*(1.0 + sw);
+  vec2 pl = C + nn*nv;
+  vec3 wp = vec3(pl.x*0.95, (rnd.x - 0.5)*0.05, (pl.y - 0.46)*0.95);
+  if(any(greaterThan(abs(wp), vec3(1.48)))){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  return wp;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/51-halo.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "halo",
+  name: "The Ice Halo",
+  roman: "LI",
+  accent: "#c9ecf5",
+  tex: "D=i_1+i_2-A,\\quad r_1+r_2=A,\\qquad D_{\\min}=2\\arcsin\\!\\left(n\\sin\\tfrac{A}{2}\\right)-A",
+  plain: "D = i₁ + i₂ − A,   r₁ + r₂ = A,   D_min = 2·arcsin(n·sin(A/2)) − A",
+  caption: "Sunlight through hexagonal ice, one crystal at a time: refract in at one face, out at another, record where the ray lands on the sky. Nothing draws a ring. Deviation is stationary at its minimum — 21.84 degrees through the 60-degree FACE PAIR at n = 1.31, 45.7 through the 90-degree one — so exits crowd there, and brightness, the density of arrivals, ignites a halo. Nothing can deviate by less than that minimum, so the sky just inside the ring is swept empty — that is the darkening you actually see; total internal reflection closes the far end instead, cutting the outer skirt off near 43.5 degrees. DISPERSION puts red innermost, reversing the rainbow's order. ORIENTATION sets the form: tumbling crystals give circles, plates with small WOBBLE give sundogs at SUN ALT, columns give tangent arcs. GLOW sets the exposure.",
+  cam: { dist: 2.7, pitch: 0.15, tgtY: 0.2, rot: 0.03 },
+  gain: 0.95,
+  params: [
+    { label: "ORIENTATION", min: 0, max: 2,  step: 1,    def: 0   },
+    { label: "FACE PAIR",   min: 0, max: 2,  step: 1,    def: 2   },
+    { label: "WOBBLE",      min: 0, max: 15, step: 0.1,  def: 2   },
+    { label: "SUN ALT",     min: 0, max: 40, step: 0.5,  def: 20  },
+    { label: "DISPERSION",  min: 0, max: 4,  step: 0.01, def: 1   },
+    { label: "GLOW",        min: 0, max: 1,  step: 0.01, def: 0.5 }
+  ],
+  glsl: `
+/* compact spectral ramp, t = 0 (400 nm, violet) .. 1 (700 nm, red).
+   Sums and products of smoothsteps only, so no channel can go negative. */
+vec3 halo_spec(float t){
+  t = clamp(t, 0.0, 1.0);
+  float r = smoothstep(0.42, 0.64, t) + 0.26*(1.0 - smoothstep(0.0, 0.20, t));
+  float g = smoothstep(0.12, 0.38, t)*(1.0 - smoothstep(0.62, 0.90, t));
+  float b = 1.0 - smoothstep(0.24, 0.48, t);
+  return vec3(r, g, b)*(0.60 + 0.40*smoothstep(0.0, 0.12, t));
+}
+
+/* refractive index of ice: Cauchy fit n = 1.3006667 + 2613.34/lam^2 through
+   the anchors n(400) = 1.317 and n(700) = 1.306. DISPERSION scales the
+   spread about 1.31; the clamp keeps n > 1 for every lever setting. */
+float halo_ice(float lam, float dsp){
+  float n = 1.3006667 + 2613.34/max(lam*lam, 1.0);
+  return max(1.31 + (n - 1.31)*dsp, 1.02);
+}
+
+/* unit vector -> orthonormal pair spanning its perpendicular plane */
+void halo_basis(vec3 nv, out vec3 a, out vec3 b){
+  vec3 tv = (abs(nv.z) < 0.9) ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+  a = normalize(cross(nv, tv) + vec3(1.0e-9));
+  b = cross(nv, a);
+}
+
+/* one standard normal deviate, Box-Muller from two hashed uniforms */
+float halo_gauss(uint hh){
+  float u1 = max(u2f(hashu(hh)), 1.0e-7);
+  float u2 = u2f(hashu(hh ^ 0x9e3779b9u));
+  return sqrt(-2.0*log(u1))*cos(TAU*u2);
+}
+
+/* vector Snell. d = propagation direction, Nf = face normal in either sense
+   (flipped internally so it opposes d), eta = n_from/n_to.
+   ok = 0.0 signals total internal reflection: the ray never leaves this face. */
+vec3 halo_snell(vec3 d, vec3 Nf, float eta, out float ok){
+  vec3 N = (dot(Nf, d) > 0.0) ? -Nf : Nf;
+  float c1 = -dot(N, d);
+  float k  = 1.0 - eta*eta*(1.0 - c1*c1);
+  ok = (k < 0.0) ? 0.0 : 1.0;
+  float c2 = sqrt(max(k, 0.0));
+  return eta*d + (eta*c1 - c2)*N;
+}
+
+vec3 shape_halo(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int omode  = int(P[0] + 0.5);        /* ORIENTATION */
+  int fmode  = int(P[1] + 0.5);        /* FACE PAIR   */
+  float wob  = P[2];                   /* WOBBLE, degrees */
+  float alt  = radians(clamp(P[3], 0.0, 89.0));
+  float dsp  = P[4];
+  float glow = P[5];
+
+  /* Sun frame: y is up, the sun sits toward -z at elevation SUN ALT. */
+  vec3 sdir = vec3(0.0, sin(alt), -cos(alt));   /* observer -> sun */
+  vec3 s    = -sdir;                            /* light propagation */
+
+  uint h0 = hashu(seed ^ 0x5a10bcd1u);
+
+  /* dim sun marker, scenery only: 1.5% of the points spread over a disc 1.2 deg
+     across -- deliberately wider than the sun's true 0.53 so it stays faint */
+  if(u2f(h0) < 0.015){
+    vec3 ua; vec3 ub;
+    halo_basis(sdir, ua, ub);
+    float rr = radians(0.6)*sqrt(q.x);
+    float ap = TAU*q.y;
+    vec3 dsun = normalize(sdir + (ua*cos(ap) + ub*sin(ap))*tan(rr) + vec3(1.0e-9));
+    col = vec3(0.022, 0.021, 0.017)*(0.5 + glow);
+    return 1.3*dsun;
+  }
+
+  uint h1 = hashu(h0);
+  uint h2 = hashu(h1);
+  uint h3 = hashu(h2);
+  uint h4 = hashu(h3);
+  uint h5 = hashu(h4);
+  uint h6 = hashu(h5);
+
+  /* c-axis of the crystal (the prism axis) per ORIENTATION.
+     0: uniform on the sphere x uniform roll = Haar measure on SO(3).
+     1: plate, c vertical with a gaussian WOBBLE tilt.
+     2: column, c horizontal at a random azimuth, same wobble. */
+  vec3 cax;
+  if(omode == 0){
+    float z  = 2.0*u2f(h1) - 1.0;
+    float az = TAU*u2f(h2);
+    float rr = sqrt(max(1.0 - z*z, 0.0));
+    cax = vec3(rr*cos(az), z, rr*sin(az));
+  } else {
+    vec3 base;
+    if(omode == 1){
+      base = vec3(0.0, 1.0, 0.0);
+    } else {
+      float ha = TAU*u2f(h3);
+      base = vec3(cos(ha), 0.0, sin(ha));
+    }
+    vec3 wa; vec3 wb;
+    halo_basis(base, wa, wb);
+    float tl = clamp(radians(wob)*halo_gauss(h1 ^ 0x2545f491u), -0.6, 0.6);
+    float wz = TAU*u2f(h2);
+    cax = normalize(base*cos(tl) + (wa*cos(wz) + wb*sin(wz))*sin(tl) + vec3(1.0e-9));
+  }
+
+  /* Side (prism) faces are parallel to the c-axis: their normals lie in the
+     perpendicular plane, 60 deg apart. Basal faces have normals +-c.
+     Alternate side faces meet at apex angle A = 60; a side face and a basal
+     face meet at A = 90. The roll psi comes from the stratified q.x, which
+     is the coordinate the deviation folds along. */
+  vec3 e1; vec3 e2;
+  halo_basis(cax, e1, e2);
+  float psi = TAU*q.x;
+  vec3 f0 = e1*cos(psi) + e2*sin(psi);
+  vec3 f2 = e1*cos(psi + 2.09439510) + e2*sin(psi + 2.09439510);
+
+  int use90;
+  if(fmode == 0){ use90 = 0; }
+  else if(fmode == 1){ use90 = 1; }
+  else { use90 = (u2f(h4) < 0.30) ? 1 : 0; }
+
+  vec3 F1 = f0;
+  vec3 F2 = f2;
+  if(use90 == 1){ F2 = cax*((u2f(h5) < 0.5) ? 1.0 : -1.0); }
+  /* entry/exit faces are not interchangeable for the 90 pair (basal-in and
+     basal-out are different arcs), so swap them half the time */
+  if(u2f(h6) < 0.5){ vec3 sw = F1; F1 = F2; F2 = sw; }
+
+  /* Negating both normals names the diametrically opposite pair of faces on
+     the same crystal, which is an equally valid pair; use it so that face 1
+     always faces the sun. Both are outward normals throughout. */
+  if(dot(s, F1) > 0.0){ F1 = -F1; F2 = -F2; }
+  if(dot(s, F1) > -1.0e-4){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+  float lt  = q.y;                          /* 0 violet .. 1 red */
+  float lam = mix(400.0, 700.0, lt);
+  float n   = halo_ice(lam, dsp);
+
+  float ok1; float ok2;
+  vec3 t1 = halo_snell(s, F1, 1.0/n, ok1);  /* into the ice */
+  if(ok1 < 0.5){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  /* the refracted ray must actually run toward face 2 */
+  if(dot(t1, F2) <= 1.0e-4){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  vec3 t2 = halo_snell(t1, F2, n, ok2);     /* out again, or trapped */
+  if(ok2 < 0.5){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+  /* the eye looks back along the outgoing ray; undeviated light returns the
+     sun itself, and the halo is the pile-up at stationary deviation. The ring's
+     inner edge is that minimum -- no ray reaches inside it. The TIR discards
+     above trim the other end: for the 60 pair the deviation branch runs
+     21.84 .. 43.46 deg, for the 90 pair 45.73 .. 57.80. */
+  vec3 sky = -normalize(t2 + vec3(1.0e-9));
+
+  float w = -dot(s, F1);                    /* projected area of the entry face */
+  col = halo_spec(lt)*(0.35 + 0.85*glow)*(0.35 + 0.90*w);
+  return 1.3*sky;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/52-conoscope.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "conoscope",
+  name: "Between Crossed Polarizers",
+  roman: "LII",
+  accent: "#ee9fd6",
+  tex: "I=\\sin^{2}(2\\chi)\\,\\sin^{2}\\!\\Bigl(\\tfrac{\\Gamma}{2}\\Bigr),\\qquad \\Gamma=\\frac{2\\pi d}{\\lambda}\\bigl(n_e(\\theta)-n_o\\bigr),\\qquad \\frac{1}{n_e(\\theta)^{2}}=\\frac{\\cos^{2}\\theta}{n_o^{2}}+\\frac{\\sin^{2}\\theta}{n_e^{2}}",
+  plain: "I = sin²(2χ)·sin²(Γ/2),   Γ = (2πd/λ)(nₑ(θ) − nₒ),   1/nₑ(θ)² = cos²θ/nₒ² + sin²θ/nₑ²",
+  caption: "Converge polarized light through a crystal plate, cross the analyzer, and the back focal plane fills with a figure that belongs to directions rather than to points. Each point here is one viewing direction carrying one wavelength: the APERTURE cone is sampled direction by direction, and the colour at each is a Monte-Carlo average of sin²(2χ)·sin²(Γ/2) across the visible band. The black Maltese cross is extinction: vibrations aligned with the polarizers, dark whatever the retardation. The rings are loci of equal retardation, counted by THICKNESS, arriving already coloured in white light until MONO returns the sodium figure. TILT walks the melatope off centre; the biaxial CRYSTAL splits the axis in two and AXIAL ANGLE opens the cross into hyperbolic brushes.",
+  cam: { dist: 2.8, pitch: 0.35, tgtY: 0.0, rot: 0.03 },
+  gain: 1.0,
+  params: [
+    { label: "CRYSTAL",     min: 0,  max: 2,   step: 1,    def: 0   },
+    { label: "THICKNESS",   min: 10, max: 800, step: 5,    def: 55  },
+    { label: "TILT",        min: 0,  max: 40,  step: 0.5,  def: 0   },
+    { label: "APERTURE",    min: 20, max: 60,  step: 1,    def: 40  },
+    { label: "AXIAL ANGLE", min: 0,  max: 90,  step: 1,    def: 40  },
+    { label: "MONO",        min: 0,  max: 1,   step: 1,    def: 0   },
+    { label: "GLOW",        min: 0,  max: 1,   step: 0.01, def: 0.5 }
+  ],
+  glsl: `
+/* spectral colour, t = 0 at 400 nm .. 1 at 700 nm. Every channel is a sum
+   of products of smoothsteps, so it can never go negative; t = 0.63 (the
+   589 nm sodium line) lands on a yellow with no blue, as it should. */
+vec3 conoscope_spec(float t){
+  t = clamp(t, 0.0, 1.0);
+  float r = smoothstep(0.42, 0.66, t) + 0.28*(1.0 - smoothstep(0.0, 0.18, t));
+  float g = smoothstep(0.12, 0.40, t)*(1.0 - smoothstep(0.58, 0.86, t));
+  float b = 1.0 - smoothstep(0.24, 0.52, t);
+  return vec3(r, g, b)*(0.60 + 0.40*smoothstep(0.0, 0.12, t));
+}
+
+/* rotate a crystal axis about the polarizer direction (lab x) by TILT */
+vec3 conoscope_tilt(vec3 a, float c, float s){
+  return vec3(a.x, a.y*c - a.z*s, a.y*s + a.z*c);
+}
+
+/* Azimuth, in the transverse frame (u1,u2), of the plane containing the
+   ray v and the optic axis A. u1 is the polarizer carried out to v, so
+   this angle IS chi. At the melatope (v parallel to A) the plane is
+   undefined -- but the retardation vanishes there too, so 0 is harmless. */
+float conoscope_az(vec3 A, vec3 v, vec3 u1, vec3 u2){
+  vec3 e = A - dot(A, v)*v;
+  float ex = dot(e, u1);
+  float ey = dot(e, u2);
+  if(ex*ex + ey*ey < 1.0e-12) return 0.0;
+  return atan(ey, ex);
+}
+
+/* Uniaxial retardation. ca = cos(theta) to the optic axis; d and lam in
+   micrometres. Thin-plate approximation: the obliquity factor 1/cos of
+   the path through the plate is dropped, which is standard at conoscopic
+   angles. Note n_e(0) = n_o exactly, so the melatope is dark. */
+float conoscope_gam(float ca, float nOrd, float nExt, float d, float lam){
+  float c2 = clamp(ca*ca, 0.0, 1.0);
+  float inv = c2/(nOrd*nOrd) + (1.0 - c2)/(nExt*nExt);
+  float ne = 1.0/sqrt(max(inv, 1.0e-9));
+  return TAU*d*(ne - nOrd)/max(lam, 1.0e-4);
+}
+
+vec3 shape_conoscope(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int   cry  = int(P[0] + 0.5);
+  float d    = P[1];                 /* plate thickness, micrometres */
+  float tlt  = radians(P[2]);
+  float apr  = radians(max(P[3], 1.0));
+  float hv   = radians(P[4]*0.5);    /* half the axial angle 2V */
+  int   mono = int(P[5] + 0.5);
+  float glow = P[6];
+
+  /* one viewing direction: uniform on the disk the aperture cone projects
+     to, so equal solid-angle-ish weight across the figure */
+  float r   = sqrt(clamp(q.x, 0.0, 1.0));
+  float ph  = TAU*q.y;
+  float th  = r*apr;
+  float sth = sin(th), cth = cos(th);
+  float cph = cos(ph), sph = sin(ph);
+  vec3 v = vec3(sth*cph, sth*sph, cth);
+
+  float lamNm = (mono == 1) ? 589.0 : mix(400.0, 700.0, rnd.x);
+  float lam = lamNm*0.001;                  /* micrometres */
+  float lt  = (lamNm - 400.0)/300.0;
+
+  /* Transverse frame at v. The polarizer is NOT merely projected across v:
+     the condenser bends each ray inside its own meridian, which parallel-
+     transports lab x from the axis out to v -- a rotation about the
+     azimuthal tangent, carrying the radial tangent to the meridian tangent
+     and fixing the azimuthal one. Transport preserves the angle to the
+     meridian, which is exactly what makes chi = phi for the untilted
+     figure and keeps all four arms of the cross the same width; bare
+     projection skews them by a factor cos(theta). Orthonormal by
+     construction, so there is nothing here to normalize or guard. */
+  vec3 eth = vec3(cth*cph, cth*sph, -sth);   /* meridian tangent  */
+  vec3 eph = vec3(-sph,    cph,      0.0);   /* azimuthal tangent */
+  vec3 u1 = cph*eth - sph*eph;               /* polarizer, transported */
+  vec3 u2 = sph*eth + cph*eph;               /* analyzer,  transported */
+
+  float ctl = cos(tlt), stl = sin(tlt);
+  float gam;
+  float chi;
+
+  if(cry == 2){
+    /* Biaxial, Biot-Fresnel approximation: two optic axes split by 2V, put
+       in the 45-degree plane so the brushes open the classical way.
+       Gamma proportional to sin(theta1) sin(theta2); 0.12 is a strong
+       biaxial birefringence, aragonite territory (0.155) rather than the
+       0.01-0.05 of most rock-formers, picked so the brushes carry a few
+       rings at the same THICKNESS that suits calcite. */
+    float sv = sin(hv), cv = cos(hv);
+    float c45 = 0.70710678;
+    vec3 A1 = conoscope_tilt(vec3( sv*c45,  sv*c45, cv), ctl, stl);
+    vec3 A2 = conoscope_tilt(vec3(-sv*c45, -sv*c45, cv), ctl, stl);
+    float d1 = dot(A1, v), d2 = dot(A2, v);
+    float s1 = sqrt(max(1.0 - d1*d1, 0.0));
+    float s2 = sqrt(max(1.0 - d2*d2, 0.0));
+    gam = TAU*d*0.12*s1*s2/max(lam, 1.0e-4);
+    /* Biot-Fresnel: the vibration directions bisect the two axial planes.
+       Each azimuth is only defined mod PI, which shifts chi by PI/2 and
+       leaves sin^2(2 chi) unchanged, so the bare mean is safe. */
+    chi = 0.5*(conoscope_az(A1, v, u1, u2) + conoscope_az(A2, v, u1, u2));
+  } else {
+    /* 0 = calcite (negative uniaxial), 1 = quartz (positive, and so weakly
+       birefringent that it needs a far thicker plate for the same rings) */
+    float nOrd = (cry == 1) ? 1.544 : 1.658;
+    float nExt = (cry == 1) ? 1.553 : 1.486;
+    vec3 A = conoscope_tilt(vec3(0.0, 0.0, 1.0), ctl, stl);
+    gam = conoscope_gam(dot(A, v), nOrd, nExt, d, lam);
+    chi = conoscope_az(A, v, u1, u2);   /* radial fast axis: chi = azimuth */
+  }
+
+  /* crossed polarizers. Ring count at the rim, calcite at the default
+     THICKNESS and APERTURE, counted in sodium light: n_e(40 deg) = 1.5800,
+     so Gamma/2pi = 55*0.0780/0.589 = 7.3 rings. */
+  float sc = sin(2.0*chi);
+  float sg = sin(0.5*gam);
+  float I = sc*sc*sg*sg;
+
+  float vig = 1.0 - smoothstep(0.86, 1.0, r);
+
+  /* the back focal plane made object: a gentle spherical cap, centred so
+     the dish straddles y = 0 (cos 0.78 = 0.710914) */
+  float psi = r*0.78;
+  float R = 1.35;
+  vec3 world = vec3(R*sin(psi)*cph,
+                    R*cos(psi) - R*0.5*(1.0 + 0.710914),
+                    R*sin(psi)*sph);
+
+  col = conoscope_spec(lt)*(I*vig*(0.55 + 1.15*glow));
+  return world;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/53-vortex.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "vortex",
+  name: "Light with a Twist",
+  roman: "LIII",
+  accent: "#b9f2a1",
+  tex: "u_{p\\ell}\\propto\\Bigl(\\tfrac{\\sqrt{2}\\,r}{w(z)}\\Bigr)^{|\\ell|}L_p^{|\\ell|}\\!\\Bigl(\\tfrac{2r^2}{w^2}\\Bigr)e^{-r^2/w^2}e^{i\\ell\\varphi},\\qquad \\Phi_G=(2p+|\\ell|+1)\\arctan\\!\\frac{z}{z_R}",
+  plain: "u_pℓ ∝ (√2 r/w)^|ℓ| · L_p^|ℓ|(2r²/w²) · e^(−r²/w²) · e^(iℓφ),   Φ_G = (2p+|ℓ|+1)·arctan(z/z_R)",
+  caption: "Allen and co-workers showed in 1992 that a Laguerre-Gaussian beam carries orbital angular momentum ℓℏ per photon, distinct from polarization's spin. The factor e^{iℓφ} winds the wavefront into |ℓ| intertwined helices — ℓ CHARGE sets their number and, by its sign, their handedness — and whenever ℓ ≠ 0 it forces a phase singularity on the axis, where the intensity must vanish: a bright annulus threaded by darkness. Brightness estimates the line integral of |u|², sampled through the envelope WAIST sets; hue reads phase, Gouy shift included, and SPIN turns it. SUPERPOSE adds the mirror mode −ℓ for 2|ℓ| petals, or beats p = 0 against p = 1 along Z RANGE. Two percent of the points are dealt onto the axis and come back nearly empty.",
+  cam: { dist: 3.1, pitch: 0.25, tgtY: 0.0, rot: 0.05 },
+  gain: 0.9,
+  params: [
+    { label: "ℓ CHARGE", min: -5,   max: 5,    step: 1,     def: 2    },
+    { label: "p RADIAL", min: 0,    max: 3,    step: 1,     def: 0    },
+    { label: "SUPERPOSE",min: 0,    max: 2,    step: 1,     def: 0    },
+    { label: "WAIST",    min: 0.15, max: 0.45, step: 0.005, def: 0.28 },
+    { label: "Z RANGE",  min: 0.4,  max: 1.5,  step: 0.01,  def: 1.2  },
+    { label: "SPIN",     min: 0,    max: 3,    step: 0.01,  def: 1.0  },
+    { label: "GLOW",     min: 0,    max: 1,    step: 0.01,  def: 0.55 }
+  ],
+  glsl: `
+/* wavenumber in display units: the waist sits at the origin and
+   z_R = k w0^2 / 2, so the default w0 = 0.28 gives z_R = 0.784 and the
+   Z RANGE of 1.2 reaches about one and a half Rayleigh ranges each way. */
+const float vortex_K = 20.0;
+
+/* associated Laguerre polynomials, written out — no recurrence needed:
+   L_0^a = 1, L_1^a = 1 + a - x, and the quadratic and cubic below.  */
+float vortex_lag(int n, float a, float x){
+  if(n <= 0) return 1.0;
+  if(n == 1) return 1.0 + a - x;
+  if(n == 2) return 0.5*x*x - (a + 2.0)*x + 0.5*(a + 1.0)*(a + 2.0);
+  return -x*x*x/6.0 + 0.5*(a + 3.0)*x*x
+         - 0.5*(a + 2.0)*(a + 3.0)*x
+         + (a + 1.0)*(a + 2.0)*(a + 3.0)/6.0;
+}
+/* the whole radial factor in the reduced variable x = 2 r^2 / w(z)^2,
+   since (sqrt(2) r / w)^{|l|} is exactly x^{|l|/2}                     */
+float vortex_rad(int n, int L, float x){
+  float s = sqrt(max(x, 0.0));
+  float t = 1.0;
+  for(int i = 0; i < 5; i++){ if(i >= L) break; t *= s; }
+  return t * vortex_lag(n, float(L), x) * exp(-0.5*x);
+}
+/* peak amplitude of that factor, so raising l or p re-lights the mode
+   instead of blowing out the exposure. Every maximum for n<=3, L<=5
+   sits at x = 5 or below, so a 31-point sweep of [0,6] brackets it to
+   within a few percent — and for p = 0 the grid lands on x = |l| exactly. */
+float vortex_peak(int n, int L){
+  float m = 1.0e-6;
+  for(int i = 0; i <= 30; i++) m = max(m, abs(vortex_rad(n, L, 0.2*float(i))));
+  return m;
+}
+vec3 shape_vortex(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int l  = int(floor(P[0] + 0.5));   /* floor rounds correctly both ways */
+  l = max(-5, min(5, l));
+  int L  = l < 0 ? -l : l;
+  int pn = max(0, min(3, int(P[1] + 0.5)));
+  int md = max(0, min(2, int(P[2] + 0.5)));
+
+  float w0 = max(0.08, P[3]);
+  float zR = 0.5*vortex_K*w0*w0;
+  float zp = P[4]*(2.0*rnd.x - 1.0);
+  float wz = w0*sqrt(1.0 + (zp/zR)*(zp/zR));
+
+  /* uniform in the cylinder that follows the beam envelope           */
+  float envf = 2.6 + 0.4*float(L) + 0.35*float(pn);
+  float Rmax = min(envf*wz, 1.45);
+  float rr = Rmax*sqrt(q.x);
+  float ph = TAU*q.y;
+  /* 2% of the points are dealt straight into the thread on the axis,
+     so the core is always interrogated however wide the ring gets    */
+  float rc = 0.25*wz;
+  if(rnd.y < 0.02) rr = rc*sqrt(rnd.z);
+
+  float x    = 2.0*rr*rr/(wz*wz);
+  float psi  = atan(zp/zR);                                   /* Gouy   */
+  /* k r^2 / 2R(z) in the form that stays regular at the waist, where
+     the radius of curvature R(z) itself runs off to infinity          */
+  float curv = 0.5*vortex_K*rr*rr*zp/(zp*zp + zR*zR);
+  float tw   = uT*(2.0*P[5]);
+  float inten, phase;
+
+  if(md == 1){                    /* LG(p, l) + LG(p, -l): 2|l| petals */
+    float A  = vortex_rad(pn, L, x)/vortex_peak(pn, L);
+    float a2 = A*cos(float(l)*ph + 0.15*P[5]*uT);   /* slight detuning */
+    inten = a2*a2;
+    phase = vortex_K*zp + curv - float(2*pn + L + 1)*psi - tw;
+    if(a2 < 0.0) phase += PI;
+  } else if(md == 2){             /* LG(0, l) + LG(1, l): a Gouy beat  */
+    float pk = vortex_peak(0, L) + vortex_peak(1, L);
+    float A0 = vortex_rad(0, L, x)/pk;
+    float A1 = vortex_rad(1, L, x)/pk;
+    float ux = A0 + A1*cos(2.0*psi);   /* the two Gouy phases differ   */
+    float uy = -A1*sin(2.0*psi);       /* by exactly 2 arctan(z/z_R)   */
+    inten = ux*ux + uy*uy;
+    float ex = (abs(ux) + abs(uy) > 1.0e-9) ? atan(uy, ux) : 0.0;
+    phase = float(l)*ph + vortex_K*zp + curv - float(L + 1)*psi - tw + ex;
+  } else {                        /* the pure mode                     */
+    float A = vortex_rad(pn, L, x)/vortex_peak(pn, L);
+    inten = A*A;
+    phase = float(l)*ph + vortex_K*zp + curv - float(2*pn + L + 1)*psi - tw;
+    if(A < 0.0) phase += PI;      /* radial nodes are pi phase jumps   */
+  }
+
+  /* the sampling cylinder flares with the beam, so points thin out as
+     1/Rmax^2; undo that and the accumulated brightness is the line
+     integral of the true intensity rather than of the point count.
+     dens is the density of the two samplers combined, so the core
+     probe sharpens the estimate on the axis without biasing it.      */
+  float cw = Rmax/(envf*wz);
+  float dens = 0.98 + (rr < rc ? 0.02*Rmax*Rmax/(rc*rc) : 0.0);
+  inten = clamp(inten, 0.0, 1.0)*cw*cw/dens;
+  if(inten < 2.0e-4){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+  vec3 hue = pal(fract(phase/TAU), vec3(0.5), vec3(0.5),
+                 vec3(1.0), vec3(0.0, 0.33, 0.67));
+  col = hue*inten*(0.45 + 0.9*P[6]);
+  return vec3(zp, rr*cos(ph), rr*sin(ph));
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/54-mirage.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "mirage",
+  name: "Mirage",
+  roman: "LIV",
+  accent: "#f5d9a0",
+  tex: "n(y)\\cos\\alpha = C,\\qquad n_{\\text{fish}}=\\frac{n_{0}}{1+r^{2}/a^{2}},\\qquad n_{\\text{Lun}}=\\sqrt{2-r^{2}/a^{2}}",
+  plain: "n(y)·cos α = C     n = n₀/(1 + r²/a²)     n = √(2 − r²/a²)",
+  caption: "Stratified air conserves n(y)·cos α along a ray — Snell's law, continuous — so light bends toward higher index. Hot ground has the lowest index: a downgoing ray turns and climbs, and the fold where rays cross is the inverted image. The water on a hot road is the sky. Real contrasts near 10⁻⁴ are invisible: EXAGGERATE inflates them, and the vertical is stretched. LAYER HEIGHT, OBJECT HEIGHT and FAN set the pencil. MODE ducts rays inside an inversion layer — the Fata Morgana stack — or gives two exact lenses: Maxwell's 1854 fisheye, every ray a circle and every point imaged perfectly onto its conjugate, and Luneburg's 1944 √(2−r²/a²), focusing any parallel bundle on the opposite rim and flown as a radar reflector still. Brightness is ray density; the caustics ignite unaided.",
+  cam: { dist: 3.0, pitch: 0.75, tgtY: 0.0, rot: 0.02 },
+  gain: 0.9,
+  params: [
+    { label: "MODE",          min: 0,     max: 3,    step: 1,     def: 0     },
+    { label: "EXAGGERATE",    min: 0.005, max: 0.08, step: 0.001, def: 0.035 },
+    { label: "OBJECT HEIGHT", min: 0.05,  max: 1.0,  step: 0.01,  def: 0.38  },
+    { label: "FAN",           min: 0.02,  max: 0.40, step: 0.005, def: 0.16  },
+    { label: "LAYER HEIGHT",  min: 0.05,  max: 0.35, step: 0.005, def: 0.10  },
+    { label: "GLOW",          min: 0,     max: 1,    step: 0.01,  def: 0.5   }
+  ],
+  glsl: `
+/* refractive index and its vertical derivative.
+   md 0: n = 1 + dn*(1 - exp(-y/h))          hot ground, n smallest at y = 0
+   md 1: n = 1 + dn*exp(-((y - yc)/h)^2)     inversion layer centred on yc  */
+vec2 mirage_prof(int md, float y, float dn, float h, float yc){
+  if(md == 0){
+    float ea = exp(-max(y, 0.0)/h);
+    return vec2(1.0 + dn*(1.0 - ea), dn*ea/h);
+  }
+  float s = (y - yc)/h;
+  float eb = exp(-min(s*s, 40.0));
+  return vec2(1.0 + dn*eb, -2.0*s*dn*eb/h);
+}
+
+/* One ray of a horizontally stratified medium, stepped in x.
+   The Snell invariant C = n(y)*cos(alpha) is conserved, so with
+   p = n(y)*sin(alpha) one has p^2 = n^2 - C^2, dy/dx = p/C and
+   dp/dx = n*n'(y)/C.  Leapfrog carries the SIGN of p -- the vertical
+   direction -- while everywhere the ray is admissible (n >= C) the
+   MAGNITUDE is re-projected onto the exact invariant, so |p| never
+   drifts and the turning point n = C, total reflection off the hot
+   layer, is the one place the vertical direction flips.  Should a step
+   land in the forbidden band n < C the sign is set outright, up the
+   index gradient, which is the direction back out; near a turn the
+   step in y shrinks like the step in p, so the reversal resolves in
+   one or two steps and the ray cannot burrow into n < C.
+   Returns (x, y, alive).                                              */
+vec3 mirage_trace(int md, float y0, float a0, float dn, float h,
+                  float yc, float dx, int k){
+  float x = -1.3;
+  float y = y0;
+  vec2 nd = mirage_prof(md, y, dn, h, yc);
+  float C = max(nd.x*cos(a0), 1.0e-3);
+  float p = nd.x*sin(a0);
+  float alive = 1.0;
+  for(int j = 0; j < 240; j++){
+    if(j >= k) break;
+    y += 0.5*dx*p/C;
+    nd = mirage_prof(md, y, dn, h, yc);
+    p += dx*nd.x*nd.y/C;
+    float d2 = nd.x*nd.x - C*C;
+    if(d2 > 0.0){ p = (p < 0.0 ? -1.0 : 1.0)*sqrt(d2); }
+    else        { p = (nd.y < 0.0 ? -1.0 : 1.0)*abs(p); }   /* turned */
+    y += 0.5*dx*p/C;
+    x += dx;
+    if(y <= 0.0 || y > 0.60){ alive = 0.0; break; }  /* absorbed, or off scene */
+  }
+  return vec3(x, y, alive);
+}
+
+vec3 shape_mirage(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int   md   = clamp(int(P[0] + 0.5), 0, 3);
+  float dn   = max(P[1], 1.0e-4);        /* EXAGGERATE; the real thing ~1e-4 */
+  float objh = P[2];
+  float fan  = P[3];
+  float h    = max(P[4], 0.03);          /* held off zero: steps must resolve it */
+  float glow = 0.35 + 0.85*P[5];
+  float jit  = (rnd.z - 0.5)*0.014;      /* the sheet is given a thickness */
+  float vs   = 3.2;                      /* vertical stretch, as in any mirage figure */
+  float aF   = 0.62;                     /* Maxwell fisheye scale a */
+  float aL   = 0.72;                     /* Luneburg radius a */
+
+  /* two per cent of the points are scenery: the ground line, or the rim */
+  if(rnd.w < 0.02){
+    vec3 sp;
+    if(md < 2){
+      sp = vec3(-1.32 + 2.64*q.x, jit, 0.6);
+    } else {
+      float aa = (md == 2) ? aF : aL;
+      float th = TAU*q.x;
+      sp = vec3(aa*cos(th), jit, -aa*sin(th));
+    }
+    col = vec3(0.028, 0.030, 0.038)*glow;
+    return sp;
+  }
+
+  vec2 pos = vec2(0.0);     /* figure coordinates, y already display-oriented */
+  float ct = 0.5;           /* colour parameter */
+  float w  = 1.0;           /* weight */
+  bool alive = true;
+
+  if(md < 2){
+    /* ---- MIRAGE.  A bar of sources at x = -1.3 and a fan of elevations.
+       MODE 0 aims mostly downward: rays shallower than the local critical
+       angle turn on the hot layer and climb again, and where neighbouring
+       rays cross, the fold, the inverted image forms.  MODE 1 puts the
+       bar inside an inversion layer and launches symmetrically, so rays
+       are trapped and oscillate -- the Fata Morgana stack.              */
+    float yc   = 0.30;
+    float bar  = 0.42*objh;
+    float hn   = rnd.x;                              /* point of the object */
+    float y0   = (md == 0) ? (0.08 + bar*hn) : (yc + bar*(hn - 0.5));
+    float a0   = (md == 0) ? fan*(1.35*q.x - 1.0) : fan*(2.0*q.x - 1.0);
+    float dx   = 2.6/240.0;
+    int   k    = int(q.y*239.0);                     /* uniform along the ray */
+    vec3 r = mirage_trace(md, y0, a0, dn, h, yc, dx, k);
+    alive = (r.z > 0.5);
+    pos = vec2(r.x, r.y*vs - 0.6);
+    ct  = 0.12 + 0.72*hn;
+    /* one element of the bar is lit brighter and walks it, so the erect
+       and the inverted image are seen to travel in opposite directions */
+    float hl = 0.5 + 0.45*sin(0.22*uT);
+    w = 0.62*(1.0 + 0.8*exp(-(hn - hl)*(hn - hl)*180.0));
+  } else if(md == 2){
+    /* ---- MAXWELL FISHEYE, n = n0/(1 + r^2/a^2).  Every ray is a circle,
+       and every ray leaving A returns to the conjugate point
+       A' = -A*a^2/|A|^2  (hand check: A = (a/2, 0) gives A' = (-2a, 0)).
+       The rays from A are therefore exactly the pencil of circles through
+       A and A': centres run along the perpendicular bisector of AA', one
+       circle per launch angle, closed form with nothing integrated.  Such
+       a circle does meet r = a at antipodal points -- its radical line
+       with r = a collapses to a line through the origin as soon as
+       |A||A'| = a^2 with A' antiparallel to A.                          */
+    float sr = clamp(0.28 + 0.32*objh, 0.28, 0.60);   /* |A| */
+    float ph = 0.12*uT;                               /* the source drifts */
+    vec2 A = sr*vec2(cos(ph), sin(ph));
+    vec2 B = -A*(aF*aF/max(sr*sr, 1.0e-6));
+    vec2 M = 0.5*(A + B);
+    vec2 dd = normalize(B - A + vec2(1.0e-12, 1.0e-12));
+    vec2 uu = vec2(-dd.y, dd.x);
+    float hb = 0.5*length(B - A);
+    float psi = (q.x - 0.5)*PI*0.82;                  /* launch angle at A */
+    float tc = hb*tan(psi);
+    vec2 cc = M + tc*uu;
+    float R = sqrt(hb*hb + tc*tc);
+    float th = TAU*q.y;                               /* uniform in arc length */
+    vec2 pp = cc + R*vec2(cos(th), sin(th));
+    if(dot(pp, pp) > 2.1) alive = false;
+    pos = pp;
+    ct  = 0.10 + 0.80*(0.5 + psi/PI);
+    w   = 0.62;
+  } else {
+    /* ---- LUNEBURG LENS, n = sqrt(2 - r^2/a^2) for r <= a, 1 outside.
+       Writing dr/dtau = T, dT/dtau = grad(n^2/2) = -r/a^2 inside and 0
+       outside keeps |T| = n and makes the interior an exact 2D harmonic
+       oscillator: r(tau) = r0*cos(tau/a) + a*T0*sin(tau/a).  A ray
+       entering the rim along d arrives at a*d after tau = a*pi/2 -- the
+       same rim point for EVERY impact parameter, which is the whole
+       point of the lens.  The straight run up to the rim is done
+       analytically (circle intersection); leapfrog does the rest, and is
+       exact again once the ray is outside, where the force vanishes.
+       n is continuous at r = a, so there is no refraction to apply.   */
+    float ph = 0.25*uT;                    /* the bundle swings; the focus rides */
+    vec2 dd = vec2(cos(ph), sin(ph));
+    vec2 uu = vec2(-dd.y, dd.x);
+    float b = (2.0*q.x - 1.0)*aL*0.985;    /* impact parameter */
+    float rin = sqrt(max(aL*aL - b*b, 1.0e-8));
+    float lin = 1.30 - rin;                /* straight run to the rim */
+    float tin = aL*PI*0.5 + 0.62;          /* through the lens, then onward */
+    float dtau = tin/200.0;
+    float tt = q.y*(lin + tin);
+    vec2 pp;
+    if(tt < lin){
+      pp = (-1.30)*dd + b*uu + tt*dd;
+    } else {
+      pp = (-rin)*dd + b*uu;               /* on the rim: |pp| = a exactly */
+      vec2 TT = dd;                        /* |T| = n = 1 there */
+      int k = int((tt - lin)/dtau);
+      for(int j = 0; j < 200; j++){
+        if(j >= k) break;
+        pp += 0.5*dtau*TT;
+        if(dot(pp, pp) < aL*aL) TT -= (dtau/(aL*aL))*pp;
+        pp += 0.5*dtau*TT;
+      }
+    }
+    if(dot(pp, pp) > 2.25) alive = false;
+    pos = pp;
+    ct  = 0.10 + 0.80*(0.5 + 0.5*b/aL);
+    w   = 0.62;
+  }
+
+  if(!alive || any(isnan(pos)) || any(isinf(pos))){
+    col = vec3(0.0);
+    return vec3(0.0, -999.0, 0.0);
+  }
+  col = pal(ct, vec3(0.72, 0.60, 0.46), vec3(0.28, 0.26, 0.30),
+            vec3(1.0, 0.95, 0.85), vec3(0.02, 0.18, 0.42)) * (w*glow);
+  return vec3(pos.x, jit, -pos.y);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/55-allpaths.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "allpaths",
+  name: "The Sum Over Paths",
+  roman: "LV",
+  accent: "#9effdf",
+  tex: "\\mathcal{A}=\\!\\!\\sum_{\\text{paths}}\\!\\! e^{\\,ikL(x)},\\qquad L(x)=|AX|+n\\,|XB|,\\qquad \\frac{dL}{dx}=0",
+  plain: "A = Σ_paths e^{ikL(x)},   L(x) = |AX| + n·|XB|,   dL/dx = 0",
+  caption: "Feynman's answer to why light goes straight: it does not — it takes every path, and they conspire. Each point lies on one two-segment route from source to detector via the surface, and the surface is sampled uniformly, so brightness here is nothing but path-sampling density. The physics is the hue: optical phase k(|AX| + n|XB|), wrapped to turns and scaled by PHASE ZOOM. Where that phase is stationary — Fermat's condition, dL/dx = 0 — a whole neighbourhood of paths shares one colour and adds; elsewhere the hue races and the paths cancel. Only the SPIRAL inset adds the phasors for real, coiling tight wherever they cancel and running straight where they do not. MODE gives Hero's equal angles, Snell's N RATIO, and — with paths deleted by STRIP PERIOD and DUTY — a grating, where censoring the cancelling paths lights fresh calm bands away from the specular one: the diffraction orders.",
+  cam: { dist: 2.9, pitch: 0.85, tgtY: 0.0, rot: 0.02 },
+  gain: 0.9,
+  params: [
+    { label: "MODE",         min: 0,    max: 2,   step: 1,     def: 0    },
+    { label: "PHASE ZOOM",   min: 1,    max: 18,  step: 0.05,  def: 10   },
+    { label: "N RATIO",      min: 1,    max: 2,   step: 0.01,  def: 1.5  },
+    { label: "STRIP PERIOD", min: 0.02, max: 0.5, step: 0.005, def: 0.12 },
+    { label: "DUTY",         min: 0.05, max: 1,   step: 0.01,  def: 0.45 },
+    { label: "SPIRAL",       min: 0,    max: 1,   step: 1,     def: 1    },
+    { label: "GLOW",         min: 0,    max: 1,   step: 0.01,  def: 0.55 }
+  ],
+  glsl: `
+/* optical path length of the two-segment route A -> (x,0) -> B; the medium
+   below the surface carries index n (n = 1 for the mirror modes) */
+float allpaths_opl(vec2 A, vec2 B, float x, float n){
+  vec2 X = vec2(x, 0.0);
+  return length(X - A) + n*length(X - B);
+}
+/* GRATING mode deletes most of the surface: only the strips survive.
+   fract() = x - floor(x) in GLSL, so negative x is handled correctly.
+   Adjacent strips differ in phase by k*L'(x)*per turns, so wherever that is a
+   whole number m every survivor carries the same hue and a fresh calm band
+   opens away from the specular one: per*|L'| = m/k is exactly the grating
+   equation d|sin th_m - sin th_i| = m*lambda with lambda = 1/k. At the default
+   k = 10, per = 0.12 that asks for |L'| = 0.833, which the m = +-1 orders meet
+   near x = +0.77 and x = -0.71 -- both well inside the mirror, flanking the
+   specular band at x = 0.12; m = +-2 falls just off its ends. */
+bool allpaths_alive(float x, float per, float duty, int md){
+  if(md != 2) return true;
+  return fract(x/per) < duty;
+}
+/* Exact fraction of [x0,x1] that survives the strips. The antiderivative of
+   the square wave is F(u) = floor(u)*duty + min(fract(u), duty) in units of
+   the period, so the phasor quadrature integrates the SAME censored surface
+   the paths are drawn from, with no beating of the strips against the grid. */
+float allpaths_cov(float x0, float x1, float per, float duty, int md){
+  if(md != 2) return 1.0;
+  float u0 = x0/per, u1 = x1/per;
+  float F0 = floor(u0)*duty + min(fract(u0), duty);
+  float F1 = floor(u1)*duty + min(fract(u1), duty);
+  return clamp(per*(F1 - F0)/max(x1 - x0, 1.0e-6), 0.0, 1.0);
+}
+vec3 shape_allpaths(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  int md      = int(P[0] + 0.5);          /* 0 mirror, 1 refraction, 2 grating */
+  float kk    = P[1];                     /* PHASE ZOOM = waves per unit length */
+  float nn    = (md == 1) ? max(P[2], 1.0) : 1.0;
+  float per   = max(P[3], 0.02);
+  float duty  = clamp(P[4], 0.02, 1.0);
+  bool  spir  = (P[5] > 0.5);
+  float glow  = 0.30 + 0.85*P[6];
+
+  const float H     = 1.3;    /* the surface spans scene x in [-H, H] */
+  const float ZOFF  = -0.15;  /* scene y = 0 lands on this world z */
+  const float SPZ   = 0.92;   /* world z of the phasor inset's centre */
+  const int   STEPS = 320;    /* phasor quadrature over the SAME x sampling */
+  float dxs = 2.0*H/float(STEPS);
+
+  /* The scene is drawn in a plane and laid flat into world xz (scene y grows
+     toward -z) with a thin y jitter, the usual flat-plate convention here. */
+  vec2 A = vec2(-0.8, 0.75);
+  float bx = 0.8 + 0.06*cos(0.21*uT);     /* slow, small orbit of the detector. */
+  float by = 0.55 + 0.06*sin(0.21*uT);    /* |grad_B L| = 1, so a 0.06 wander is
+                                             0.6 turns at default k: the calm band
+                                             drifts a little and its colour sweeps
+                                             right through, and the spiral turns
+                                             with it. Period ~30 s. */
+  vec2 B = vec2(bx, (md == 1) ? -by : by);
+
+  /* three voices: the paths, a dim rendering of the surface itself,
+     and the running phasor sum */
+  float g = u2f(hashu(seed ^ 0x5bf03635u));
+  bool doPh   = spir && (g < 0.12);
+  bool doSurf = (!doPh) && (g >= 0.12) && (g < 0.145);
+
+  if(doSurf){
+    float xs = mix(-H, H, q.x);
+    if(!allpaths_alive(xs, per, duty, md)){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+    col = vec3(0.20, 0.24, 0.26)*glow*0.30;
+    return vec3(xs, (rnd.x - 0.5)*0.024, ZOFF);
+  }
+
+  if(doPh){
+    /* Running sum of exp(i*2pi*phase) over the surface, in the same uniform
+       x quadrature the paths are drawn from, truncated at this point's own x.
+       One loop yields both the partial sum (Sa, Sb bracket the M-th phasor)
+       and the total, which centres the figure. Phase advances well under a
+       quarter turn per step at default levers, so the coils are resolved;
+       they coarsen at the rim only for the largest PHASE ZOOM and N RATIO. */
+    int M = int(q.x*float(STEPS));
+    if(M > STEPS - 1) M = STEPS - 1;
+    if(M < 0) M = 0;
+
+    vec2 S = vec2(0.0), Sa = vec2(0.0), Sb = vec2(0.0);
+    float covM = 0.0, phM = 0.0;
+    for(int j = 0; j < STEPS; j++){
+      float x0 = -H + float(j)*dxs;
+      float cv = allpaths_cov(x0, x0 + dxs, per, duty, md);
+      float ph = fract(kk*allpaths_opl(A, B, x0 + 0.5*dxs, nn));
+      if(j == M){ Sa = S; covM = cv; phM = ph; }
+      S += cv*vec2(cos(TAU*ph), sin(TAU*ph));
+      if(j == M) Sb = S;
+    }
+    if(covM <= 0.0){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+
+    /* q.y walks the M-th phasor head to tail, so the curve is drawn at
+       uniform arc length, exactly as Plate XLII draws its curlicues */
+    vec2 w = (mix(Sa, Sb, q.y) - 0.5*S)*(1.1/(float(STEPS)/3.0));
+    float r = length(w);
+    w *= inversesqrt(1.0 + (r/0.55)*(r/0.55));   /* soft clamp, no division by 0 */
+
+    /* Heavily trimmed, and it has to be: 12% of the points land on a CURVE
+       roughly a thousand pixels long, against 88% spread over the fan's whole
+       area -- some thirty times the density per pixel. Untrimmed the inset
+       would clip to a solid blob and the one thing it is for, coil versus
+       straight run, would burn away. Only its SHAPE carries the amplitude. */
+    col = pal(phM, vec3(0.48, 0.52, 0.50), vec3(0.42, 0.40, 0.44),
+              vec3(1.0, 1.0, 1.0), vec3(0.15, 0.42, 0.68))*glow*0.055;
+    return vec3(w.x, (rnd.x - 0.5)*0.020, SPZ + w.y);
+  }
+
+  /* ONE PATH. q.x picks the surface point across the whole surface -- not the
+     specular one -- and q.y walks the bent polyline at uniform arc length. */
+  float xs = mix(-H, H, q.x);
+  if(!allpaths_alive(xs, per, duty, md)){ col = vec3(0.0); return vec3(0.0, -999.0, 0.0); }
+  vec2 X = vec2(xs, 0.0);
+  float d1 = length(X - A);
+  float d2 = length(X - B);
+  float tt = q.y*(d1 + d2);
+  vec2 sp = (tt < d1) ? mix(A, X, tt/max(d1, 1.0e-5))
+                      : mix(X, B, (tt - d1)/max(d2, 1.0e-5));
+
+  /* hue = total optical phase in turns. Near the stationary point dL/dx = 0,
+     so a whole neighbourhood of paths shares one colour: equal angles for the
+     mirror, sin i = n sin t for the interface. */
+  float th = fract(kk*(d1 + nn*d2));
+  col = pal(th, vec3(0.48, 0.52, 0.50), vec3(0.42, 0.40, 0.44),
+            vec3(1.0, 1.0, 1.0), vec3(0.15, 0.42, 0.68))*glow;
+  return vec3(sp.x, (rnd.x - 0.5)*0.016, ZOFF - sp.y);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/56-starfield.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "starfield",
+  name: "The Sky at Nine-Tenths c",
+  roman: "LVI",
+  accent: "#8fa8ff",
+  tex: "\\cos\\theta' = \\dfrac{\\cos\\theta+\\beta}{1+\\beta\\cos\\theta},\\qquad \\delta=\\gamma\\,(1+\\beta\\cos\\theta),\\qquad T'=\\delta\\,T,\\qquad I_{\\mathrm{bol}}\\propto\\delta^{4}",
+  plain: "cos θ′ = (cos θ + β)/(1 + β cos θ),   δ = γ(1 + β cos θ),   T′ = δT,   I_bol ∝ δ⁴",
+  caption: "Fly at SPEED = β and the sky folds forward: aberration, cos θ′ = (cos θ + β)/(1 + β cos θ), pulls half the celestial sphere into a cone of half-angle arccos β — 26 degrees at β = 0.9. GRID sends the rest-frame graticule through the same map, so the crowding becomes geometry. Each star is a blackbody, Doppler-shifted to δT with δ = γ(1 + β cos θ) and beamed, its bolometric intensity going as δ⁴ — which the accumulated brightness estimates, held by a soft knee. TEMP BIAS favours cool dwarfs; CMB adds the 2.725 K shell, the dipole your speedometer cannot hide.",
+  cam: { dist: 0.5, pitch: 0.05, tgtY: 0.0, rot: 0.02 },
+  gain: 0.95,
+  params: [
+    { label: "SPEED",      min: 0,    max: 0.99, step: 0.001, def: 0.9  },
+    { label: "GRID",       min: 0,    max: 1,    step: 1,     def: 1    },
+    { label: "CMB",        min: 0,    max: 1,    step: 1,     def: 1    },
+    { label: "STAR COUNT", min: 1000, max: 8000, step: 100,   def: 4000 },
+    { label: "TEMP BIAS",  min: 0,    max: 1,    step: 0.01,  def: 0.65 },
+    { label: "GLOW",       min: 0,    max: 1,    step: 0.01,  def: 0.5  }
+  ],
+  glsl: `
+/* ---- blackbody colour, 1000..40000 K -------------------------------
+   Helland-style piecewise fits with every joint smoothstepped, then
+   raised to the 1.5 power to sit in the roughly-linear space the
+   accumulator works in.  Never negative, monotone in hue:
+   3000 K -> (1.00, 0.58, 0.28), 6500 K -> (1.00, 1.00, 0.98),
+   15000 K -> (0.60, 0.72, 1.00), 40000 K -> (0.46, 0.62, 1.00).   */
+vec3 starfield_bb(float T){
+  float t  = clamp(T, 1000.0, 40000.0) * 0.01;          /* 10 .. 400 */
+  float rh = 329.698727446 * pow(max(t - 60.0, 1.0), -0.1332047592) * (1.0/255.0);
+  float r  = mix(1.0, rh, smoothstep(64.0, 78.0, t));
+  float gc = (99.4708025861 * log(max(t, 1.0)) - 161.1195681661) * (1.0/255.0);
+  float gh = 288.1221695283 * pow(max(t - 60.0, 1.0), -0.0755148492) * (1.0/255.0);
+  float g  = mix(gc, gh, smoothstep(58.0, 74.0, t));
+  float bc = (138.5177312231 * log(max(t - 10.0, 1.0)) - 305.0447927307) * (1.0/255.0);
+  bc *= smoothstep(18.0, 25.0, t);
+  float b  = mix(bc, 1.0, smoothstep(60.0, 78.0, t));
+  vec3 c = clamp(vec3(r, g, b), 0.0, 1.0);
+  return c * sqrt(c);
+}
+
+/* dim magma ramp for the microwave shell */
+vec3 starfield_magma(float t){
+  t = clamp(t, 0.0, 1.0);
+  vec3 c = mix(vec3(0.06, 0.03, 0.16), vec3(0.42, 0.09, 0.36), smoothstep(0.00, 0.35, t));
+  c = mix(c, vec3(0.85, 0.28, 0.20), smoothstep(0.30, 0.68, t));
+  c = mix(c, vec3(1.00, 0.78, 0.42), smoothstep(0.62, 1.00, t));
+  return c;
+}
+
+/* slow yaw of the ship relative to the rest-frame sky (the flight axis
+   stays +z; the sky drifts past it) */
+vec3 starfield_yaw(vec3 d){
+  float a = 0.30 + 0.02*uT;
+  float c = cos(a), s = sin(a);
+  return vec3(c*d.x + s*d.z, d.y, -s*d.x + c*d.z);
+}
+
+/* relativistic aberration, motion along +z.  mu' = (mu + beta)/(1 + beta mu):
+   mu = 0, beta = 0.9 -> mu' = 0.9, i.e. the rest-frame hemisphere is squeezed
+   into a cone of half-angle arccos(beta) = 25.8 deg about the flight
+   direction.  Denominator >= 1 - beta > 0 for every legal beta. */
+vec3 starfield_ab(vec3 d, float beta){
+  /* flight axis is -z so the beamed forward sky faces the plate's home
+     camera (which looks toward -z); mu is measured against the flight axis */
+  float mu  = clamp(-d.z, -1.0, 1.0);
+  float den = max(1.0 + beta*mu, 1.0e-4);
+  float mup = clamp((mu + beta)/den, -1.0, 1.0);
+  float sp  = sqrt(max(1.0 - mup*mup, 0.0));
+  vec2  tp  = d.xy;
+  float lt  = length(tp);
+  vec2  un  = mix(vec2(1.0, 0.0), tp/max(lt, 1.0e-7), step(1.0e-7, lt));
+  return vec3(un*sp, -mup);
+}
+
+void starfield_basis(vec3 d, out vec3 t1, out vec3 t2){
+  vec3 rf = mix(vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0), step(0.9, abs(d.z)));
+  t1 = normalize(cross(d, rf) + vec3(1.0e-9));
+  t2 = cross(d, t1);
+}
+
+vec3 shape_starfield(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  float beta = clamp(P[0], 0.0, 0.995);
+  float gam  = 1.0/sqrt(max(1.0 - beta*beta, 1.0e-6));
+  float glow = 0.35 + 0.85*clamp(P[5], 0.0, 1.0);
+  float R    = 1.30;
+
+  /* one hash splits the point budget between the three populations */
+  float fGrid = step(0.5, P[1]) * 0.25;
+  float fCmb  = step(0.5, P[2]) * 0.20;
+  float gsel  = u2f(hashu(seed ^ 0x9E3779B9u));
+
+  if(gsel < fGrid){
+    /* THE GRATICULE. Twelve meridians and five parallels of the REST-frame
+       sphere, sampled uniformly in arclength, then pushed through exactly
+       the same aberration map as the stars.  Per-point emission is constant
+       along each curve, so the visible pile-up toward +z is pure geometry. */
+    uint gh0 = hashu(seed + 0x2545F491u);
+    uint gh1 = hashu(gh0);
+    float th; float lo; float w;
+    if(u2f(gh0) < 0.5){
+      lo = floor(u2f(gh1)*12.0) * (TAU/12.0);
+      th = mix(0.03*PI, 0.97*PI, q.x);      /* stop short of the poles */
+      w  = 1.0;
+    } else {
+      th = (floor(u2f(gh1)*5.0) + 1.0) * (PI/6.0);   /* 30..150 deg */
+      lo = q.x * TAU;
+      w  = 0.60*sin(th);                    /* equalise linear density */
+    }
+    vec3 d  = vec3(sin(th)*cos(lo), sin(th)*sin(lo), cos(th));
+    vec3 dp = starfield_ab(starfield_yaw(d), beta);
+    vec3 t1; vec3 t2; starfield_basis(dp, t1, t2);
+    float ja = TAU*rnd.x;
+    float jr = 0.0022*sqrt(max(rnd.y, 0.0));
+    vec3 pos = normalize(dp + (t1*cos(ja) + t2*sin(ja))*jr + vec3(1.0e-9));
+    col = vec3(0.42, 0.60, 1.00) * (0.060 * w * glow);
+    return pos * R;
+  }
+
+  if(gsel < fGrid + fCmb){
+    /* THE MICROWAVE SHELL. T'(mu') = 2.725 K times the same delta; at
+       beta = 0.00123 this is the 3.36 mK dipole we actually measure. */
+    float cz = 2.0*q.x - 1.0;
+    float sz = sqrt(max(1.0 - cz*cz, 0.0));
+    float ph = TAU*q.y;
+    vec3  dr = starfield_yaw(vec3(sz*cos(ph), sz*sin(ph), cz));
+    float mu  = clamp(-dr.z, -1.0, 1.0);           /* against the -z flight axis */
+    float dop = gam*(1.0 + beta*mu);
+    vec3  dp  = starfield_ab(dr, beta);
+    float Tp  = 2.725*dop;
+    float tt  = clamp((Tp - 1.4)/9.0, 0.0, 1.0);
+    col = starfield_magma(tt) * ((0.030 + 0.075*tt) * glow);
+    return dp * (R*1.06);
+  }
+
+  /* THE STARS. Each point is assigned to one catalogue entry; the entry's
+     direction, temperature and absolute magnitude are hashed from its index,
+     so every point that lands on a star agrees about that star. */
+  int  nst = int(clamp(P[3], 1000.0, 8000.0) + 0.5);
+  uint si  = hashu(seed) % uint(nst);
+  uint s1  = hashu(si*2654435761u + 101u);
+  uint s2  = hashu(s1);
+  uint s3  = hashu(s2);
+  uint s4  = hashu(s3);
+  float a1 = u2f(s1), a2 = u2f(s2), a3 = u2f(s3), a4 = u2f(s4);
+
+  float cz = 2.0*a1 - 1.0;                 /* uniform on the sphere */
+  float sz = sqrt(max(1.0 - cz*cz, 0.0));
+  float ph = TAU*a2;
+  vec3  dr = starfield_yaw(vec3(sz*cos(ph), sz*sin(ph), cz));
+
+  float mu  = clamp(-dr.z, -1.0, 1.0);     /* rest-frame cos(theta) vs -z flight axis */
+  float dop = gam*(1.0 + beta*mu);         /* = 1/(gam(1 - beta mu')) */
+  vec3  dp  = starfield_ab(dr, beta);
+
+  /* temperature: 2500..12000 K, TEMP BIAS bends the draw toward M dwarfs */
+  float ex  = mix(1.0, 4.0, clamp(P[4], 0.0, 1.0));
+  float T   = 2500.0 + 9500.0*pow(max(a3, 1.0e-4), ex);
+  float lum = pow(10.0, -0.4*(5.0*a4 - 1.0));   /* absolute magnitude -1..4 */
+
+  /* beaming: I_bol scales as delta^4.  At beta = 0.99 straight ahead
+     delta = sqrt(1.99/0.01) = sqrt(199), so delta^4 = 199^2, near 4e4:
+     a soft knee is mandatory. */
+  float dd = dop*dop;
+  float d4 = dd*dd;
+  float br = d4*lum;
+  float cap = 6.0;
+  float bs  = br/(1.0 + br/cap);
+
+  /* bright stars also spread wider, the way a bright star's image swells on
+     a saturating detector: this drains the forward cluster's peak density
+     without touching the total energy laid down per star */
+  vec3 t1; vec3 t2; starfield_basis(dp, t1, t2);
+  float sig = 0.0068*(1.0 + 0.9*sqrt(clamp(bs/cap, 0.0, 1.0)));
+  float jr  = min(sig*sqrt(max(-2.0*log(max(1.0 - q.x, 1.0e-6)), 0.0)), 4.0*sig);
+  float ja  = TAU*q.y;
+  vec3 pos = normalize(dp + (t1*cos(ja) + t2*sin(ja))*jr + vec3(1.0e-9));
+
+  col = starfield_bb(dop*T) * (0.22 * bs * glow);
+  return pos * R;
+}`
+});
+
+</script>
 
 <!-- core: engine -->
 <script>
@@ -4180,15 +5653,33 @@ Atlas.Camera = (function () {
                     vignette, dither → screen
    Brightness therefore remains a density estimate of the measure;
    persistence just extends the estimate through time.
+
+   Point programs are compiled PER MORPH PAIR, not as one ubershader:
+   Windows Chrome routes GLSL through D3D's HLSL compiler, whose cost
+   grows super-quadratically with program size — 48 plates took 92 s
+   and 56 hit ANGLE's ~100 s watchdog and killed the context. A
+   2-plate program links in well under a second, is compiled
+   asynchronously (KHR_parallel_shader_compile) while the previous
+   plate keeps rendering, and is cached LRU alongside Chrome's own
+   on-disk shader cache.
    ═══════════════════════════════════════════════════════════════════ */
 Atlas.Renderer = (function () {
   let gl, canvas, hasFloat = false;
-  let progPts, progTm, progFade;
-  let U = {}, Utm = {}, Ufade = {};
+  let progTm, progFade;
+  let Utm = {}, Ufade = {};
   let vao;
   let accum = [null, null], accumTex = [null, null], cur = 0;
   let fbW = 0, fbH = 0;
   let renderScale = 1;
+  let parallelExt = null;
+
+  /* pair-program cache: [{ key, set, prog, U, ready, cbs, stamp }] */
+  let cache = [];
+  let stamp = 0;
+  const CACHE_MAX = 8;
+
+  const PT_UNIFORMS = ["uVP","uT","uMorph","uModeA","uModeB","uPt",
+                       "uIntensity","uGainA","uGainB"];
 
   function compile(type, src) {
     const s = gl.createShader(type);
@@ -4206,6 +5697,80 @@ Atlas.Renderer = (function () {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS))
       throw new Error(gl.getProgramInfoLog(p));
     return p;
+  }
+
+  function keyFor(indices) {
+    return [...new Set(indices)].sort((a, b) => a - b).join(":");
+  }
+
+  function fetchUniforms(prog) {
+    const U = {};
+    for (const n of PT_UNIFORMS) U[n] = gl.getUniformLocation(prog, n);
+    U.uPA = gl.getUniformLocation(prog, "uPA[0]");
+    U.uPB = gl.getUniformLocation(prog, "uPB[0]");
+    return U;
+  }
+
+  function finishEntry(e) {
+    if (!gl.getProgramParameter(e.prog, gl.LINK_STATUS)) {
+      /* a plate that fails to compile leaves the previous program active;
+         report on the console rather than killing the whole atlas */
+      console.error("atlas: pair " + e.key + " failed to link:",
+                    gl.getProgramInfoLog(e.prog));
+      e.failed = true;
+    } else {
+      e.U = fetchUniforms(e.prog);
+    }
+    e.ready = true;
+    const cbs = e.cbs; e.cbs = [];
+    for (const cb of cbs) cb(!e.failed);
+  }
+
+  /* create (or reuse) the program for a set of plate indices */
+  function requestEntry(indices) {
+    const key = keyFor(indices);
+    let e = cache.find(c => c.key === key);
+    if (e) { e.stamp = ++stamp; return e; }
+    const uniq = [...new Set(indices)].sort((a, b) => a - b);
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, Atlas.buildVertexShaderFor(uniq)));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, Atlas.GLSL.pointFrag));
+    gl.linkProgram(prog);
+    e = { key, set: uniq, prog, U: null, ready: false, failed: false,
+          cbs: [], stamp: ++stamp };
+    cache.push(e);
+    /* evict the stalest ready entry beyond the cap */
+    if (cache.length > CACHE_MAX) {
+      const ready = cache.filter(c => c.ready).sort((a, b) => a.stamp - b.stamp);
+      if (ready.length) {
+        const victim = ready[0];
+        cache = cache.filter(c => c !== victim);
+        gl.deleteProgram(victim.prog);
+      }
+    }
+    if (!parallelExt) finishEntry(e);         /* synchronous fallback */
+    return e;
+  }
+
+  /* advance pending async compiles; called once per frame */
+  function pollPending() {
+    if (!parallelExt) return;
+    for (const e of cache) {
+      if (e.ready) continue;
+      if (gl.getProgramParameter(e.prog, parallelExt.COMPLETION_STATUS_KHR))
+        finishEntry(e);
+    }
+  }
+
+  function entryCovering(a, b) {
+    let best = null;
+    for (const e of cache) {
+      if (!e.ready || e.failed) continue;
+      if (e.set.includes(a) && e.set.includes(b)) {
+        if (!best || e.stamp > best.stamp) best = e;
+      }
+    }
+    return best;
   }
 
   function makeTargets(w, h) {
@@ -4258,21 +5823,21 @@ Atlas.Renderer = (function () {
       });
       if (!gl) return false;
       hasFloat = !!gl.getExtension("EXT_color_buffer_float");
+      parallelExt = gl.getExtension("KHR_parallel_shader_compile");
       renderScale = Math.min(window.devicePixelRatio || 1, 1.5);
 
-      progPts  = program(Atlas.buildVertexShader(), Atlas.GLSL.pointFrag);
       progTm   = program(Atlas.GLSL.quadVert, Atlas.GLSL.tonemapFrag);
       progFade = program(Atlas.GLSL.quadVert, Atlas.GLSL.fadeFrag);
 
-      for (const n of ["uVP","uT","uMorph","uModeA","uModeB","uPt",
-                       "uIntensity","uGainA","uGainB"])
-        U[n] = gl.getUniformLocation(progPts, n);
-      U.uPA = gl.getUniformLocation(progPts, "uPA[0]");
-      U.uPB = gl.getUniformLocation(progPts, "uPB[0]");
       for (const n of ["uTex","uExp","uGamma","uSat","uHueM"])
         Utm[n] = gl.getUniformLocation(progTm, n);
       Ufade.uTex = gl.getUniformLocation(progFade, "uTex");
       Ufade.uPersist = gl.getUniformLocation(progFade, "uPersist");
+
+      /* the first plate compiles synchronously so the atlas has a first
+         frame immediately — a 1-plate program is fast on every backend */
+      const first = requestEntry([0]);
+      if (!first.ready) finishEntry(first);
 
       vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
@@ -4291,6 +5856,14 @@ Atlas.Renderer = (function () {
     hasFloat() { return hasFloat; },
     size() { ensureSize(); return { w: canvas.width, h: canvas.height }; },
 
+    /* Request the program covering the given plate indices. onReady(ok)
+       fires immediately if cached, else when the async link completes. */
+    prepare(indices, onReady) {
+      const e = requestEntry(indices);
+      if (e.ready) { onReady(!e.failed); return; }
+      e.cbs.push(onReady);
+    },
+
     gpuName() {
       try {
         const dbg = gl.getExtension("WEBGL_debug_renderer_info");
@@ -4306,6 +5879,9 @@ Atlas.Renderer = (function () {
              gainA, gainB, PA, PB, persist, exposure, gamma, hue, sat */
     render(o) {
       ensureSize();
+      pollPending();
+      const entry = entryCovering(o.modeA, o.modeB);
+      if (!entry) return false;                /* pair still compiling */
       const W = canvas.width, H = canvas.height;
       cur ^= 1;
       const prev = 1 - cur;
@@ -4327,9 +5903,10 @@ Atlas.Renderer = (function () {
       }
 
       /* pass 2 — the measure */
+      const U = entry.U;
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
-      gl.useProgram(progPts);
+      gl.useProgram(entry.prog);
       gl.bindVertexArray(vao);
       gl.uniformMatrix4fv(U.uVP, false, o.vp);
       gl.uniform1f(U.uT, o.simT);
@@ -4357,6 +5934,7 @@ Atlas.Renderer = (function () {
       gl.uniform1f(Utm.uSat, o.sat);
       gl.uniformMatrix3fv(Utm.uHueM, true, hueMatrix(o.hue));
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      return true;
     },
 
     exportPNG(name) {
@@ -4479,7 +6057,13 @@ Atlas.UI = (function () {
     const defs = [
       { key: "densExp", label: "DENSITY", min: 20, max: 27, step: 1, def: 23,
         fmt: v => "2^" + v,
-        set: v => { S.N = 1 << v; $("densWarn").classList.toggle("show", v >= 26); } },
+        set: v => {
+          /* ceiling for the adaptive governor in main.js; it climbs to
+             this while the frame rate holds and retreats when it sags */
+          S.maxExp = v;
+          if (S.autoExp > v) S.autoExp = v;
+          $("densWarn").classList.toggle("show", v >= 26);
+        } },
       { key: "ptSize",  label: "POINT SIZE", min: 0.5, max: 4,   step: 0.05, def: 1.15,
         set: v => S.ptSize = v },
       { key: "expoLog", label: "EXPOSURE",   min: -1,  max: 1.3, step: 0.01, def: 0,
@@ -4594,6 +6178,12 @@ Atlas.UI = (function () {
 "use strict";
 /* ═══════════════════════════════════════════════════════════════════
    MAIN — owns the state machine and the frame loop.
+   Plate switches wait for the pair program to finish compiling
+   (asynchronously, while the current plate keeps rendering), then
+   morph. Density starts low and climbs toward the DENSITY lever's
+   ceiling while the frame rate holds — so first paint is instant
+   even on modest GPUs, and strong ones reach full density in a
+   couple of seconds.
    ═══════════════════════════════════════════════════════════════════ */
 (function () {
   const canvas = document.getElementById("gl");
@@ -4601,19 +6191,37 @@ Atlas.UI = (function () {
   const MORPH_SECS = 1.7;
 
   const S = Atlas.state = {
-    N: 1 << 23, ptSize: 1.15, exposure: 1, gamma: 0.82, hue: 0, sat: 1,
+    maxExp: 23, autoExp: 20, N: 1 << 20,
+    ptSize: 1.15, exposure: 1, gamma: 0.82, hue: 0, sat: 1,
     persist: 0, flow: 1, fovDeg: 52, spinMul: 1,
     paused: false, modeA: 0, modeB: 0, morph: 1, simT: 0
   };
 
+  let prepToken = 0;
+  let pendingTarget = -1;
+
+  function prewarmNeighbors() {
+    const n = MODES.length;
+    Atlas.Renderer.prepare([S.modeB, (S.modeB + 1) % n], () => {});
+    Atlas.Renderer.prepare([S.modeB, (S.modeB - 1 + n) % n], () => {});
+  }
+
   function setMode(i) {
     const n = MODES.length;
     i = ((i % n) + n) % n;
-    if (i === S.modeB) return;
-    S.modeA = S.modeB;                       /* if mid-flight, snap forward */
-    S.modeB = i;
-    S.morph = 0;
-    Atlas.UI.swapPlateText(i);
+    if (i === S.modeB || i === pendingTarget) return;
+    pendingTarget = i;
+    const token = ++prepToken;
+    Atlas.Renderer.prepare([S.modeB, i], ok => {
+      if (token !== prepToken) return;         /* superseded by a newer request */
+      pendingTarget = -1;
+      if (!ok) return;                         /* pair failed to link: stay put */
+      S.modeA = S.modeB;                       /* if mid-flight, snap forward */
+      S.modeB = i;
+      S.morph = 0;
+      Atlas.UI.swapPlateText(i);
+      prewarmNeighbors();
+    });
   }
   function togglePause() {
     S.paused = !S.paused;
@@ -4630,10 +6238,11 @@ Atlas.UI = (function () {
   }
   Atlas.UI.init(S, { setMode, togglePause, exportPNG });
   Atlas.UI.setGpuLine(Atlas.Renderer.gpuName() +
-    (Atlas.Renderer.hasFloat() ? " \u00b7 RGBA16F" : " \u00b7 RGBA8"));
+    (Atlas.Renderer.hasFloat() ? " · RGBA16F" : " · RGBA8"));
   Atlas.Camera.attach(canvas);
   Atlas.Camera.home(MODES[0].cam);
   canvas.addEventListener("dblclick", () => Atlas.Camera.home(MODES[S.modeB].cam));
+  prewarmNeighbors();
 
   let last = performance.now();
   let fpsAcc = 0, fpsN = 0, fpsClock = 0;
@@ -4651,6 +6260,10 @@ Atlas.UI = (function () {
     const home = MODES[S.modeB].cam;
     Atlas.Camera.update(dt, home, S.morph < 1, S.spinMul, Atlas.UI.reduceMotion());
 
+    /* density governor: climb one power while the frame rate holds,
+       back off when it sags; the DENSITY lever is the ceiling */
+    S.N = 1 << Math.min(S.autoExp, S.maxExp);
+
     const { w, h } = Atlas.Renderer.size();
     const vp = Atlas.Camera.matrix(w / h, S.fovDeg * Math.PI / 180);
 
@@ -4659,7 +6272,7 @@ Atlas.UI = (function () {
     const base = Math.min(0.5, S.exposure * 0.35 * (w * h) / S.N);
     const intensity = base * (1 - S.persist * 0.92);
 
-    Atlas.Renderer.render({
+    const drew = Atlas.Renderer.render({
       vp, simT: S.simT,
       morph: S.morph >= 1 ? 0 : S.morph,
       modeA: S.modeA, modeB: S.modeB,
@@ -4672,10 +6285,14 @@ Atlas.UI = (function () {
       gamma: S.gamma, hue: S.hue, sat: S.sat
     });
 
-    fpsAcc += dt; fpsN++; fpsClock += dt;
+    if (drew) { fpsAcc += dt; fpsN++; fpsClock += dt; }
     if (fpsClock > 0.5) {
       const fps = fpsN / fpsAcc;
       Atlas.UI.setStats(fps, S.N * fps);
+      if (!S.paused && document.visibilityState === "visible" && !Atlas.Camera.dragging()) {
+        if (fps > 57 && S.autoExp < S.maxExp) S.autoExp++;
+        else if (fps < 42 && S.autoExp > 20) S.autoExp--;
+      }
       fpsAcc = 0; fpsN = 0; fpsClock = 0;
     }
     requestAnimationFrame(frame);

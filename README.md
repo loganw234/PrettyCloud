@@ -11,13 +11,14 @@ or use the prebuilt single file at `build/atlas-bundled.html`.
 
 ## The plates
 
-Forty-eight in all, spanning topology, chaos, number theory, quantum mechanics, optics,
-general relativity, ergodic theory, Lie theory, hyperbolic geometry and catastrophe theory.
+Fifty-six in all, spanning topology, chaos, number theory, quantum mechanics, general
+relativity, ergodic theory, Lie theory, hyperbolic geometry, catastrophe theory — and a
+"Cabinet of Light": eight plates of wave, ray and relativistic optics (plates XLIX–LVI).
 Every parameter on the right is live, and `R` randomizes the current plate's levers.
 
-![Contact sheet of all 48 plates, each labelled with its roman numeral and title](docs/screenshots/atlas.png)
+![Contact sheet of all 56 plates, each labelled with its roman numeral and title](docs/screenshots/atlas.png)
 
-Six of them full size:
+Seven of them full size:
 
 ![Plate I — the Hopf Fibration: linked fiber circles over S², hue naming the base point](docs/screenshots/hopf-fibration.png)
 
@@ -31,6 +32,8 @@ Six of them full size:
 
 ![Plate XLIV — The Shape of E8: all 240 roots in the Coxeter plane, eight concentric rings of thirty, with the 60-degree edge web sampled root by root](docs/screenshots/e8-coxeter-plane.png)
 
+![Plate LVI — The Sky at Nine-Tenths c: the celestial sphere seen from inside at beta = 0.9, aberration crowding the blueshifted, beamed stars into the direction of flight](docs/screenshots/relativistic-starfield.png)
+
 ## Structure
 
 ```
@@ -38,7 +41,8 @@ index.html            markup + ordered <script> tags
 css/atlas.css         museum-plate styling
 js/core/registry.js   Atlas namespace, plate registration, shader assembly
 js/core/glsl-lib.js   shared GLSL (vertex main, tonemap, trails)
-js/core/renderer.js   GL state, ping-pong accumulation, grading, PNG export
+js/core/renderer.js   GL state, per-pair shader cache, accumulation, PNG export
+shader-bisect.html    diagnostic: times shader compilation per plate subset
 js/core/camera.js     orbit camera with inertia
 js/core/ui.js         placard, lever racks, telemetry, keyboard
 js/core/main.js       state machine + frame loop
@@ -101,6 +105,17 @@ clipped (see plate XII).
   exposure.
 - Accumulation is RGBA16F (half-float). At extreme exposure × density the
   brightest pixels can saturate 16F; back off EXPOSURE before DENSITY.
-- 2^27 points is real work: expect ~8 GB/s of raster traffic. A desktop GPU
-  (the project was aimed at an RTX 5060 Ti) holds 60 fps on most plates;
-  integrated GPUs should stay at or below 2^23.
+- Point shaders are compiled **per morph pair**, never as one ubershader.
+  Windows Chrome routes GLSL through D3D's HLSL compiler, whose cost grows
+  super-quadratically with program size — one shader holding all 48 early
+  plates took 92 s to compile, and past ~50 plates ANGLE's ~100 s watchdog
+  kills the context outright. A 2-plate program links in well under a
+  second, compiles asynchronously (`KHR_parallel_shader_compile`) while the
+  previous plate keeps rendering, and is cached (LRU, plus Chrome's own
+  disk cache). `shader-bisect.html` measures this on your machine.
+- DENSITY is a ceiling, not a fixed count: rendering starts at 2^20 and a
+  governor climbs one power per half-second while the frame rate holds
+  above ~57 fps, retreating below ~42. First paint is immediate on any
+  GPU; a desktop GPU (the project was aimed at an RTX 5060 Ti) reaches
+  2^23 in about two seconds and holds 60 fps on most plates. 2^27 points
+  is real work — expect ~8 GB/s of raster traffic at the top of the lever.
