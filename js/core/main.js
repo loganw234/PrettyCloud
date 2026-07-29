@@ -55,6 +55,48 @@
     Atlas.Renderer.exportPNG("atlas-plate-" + roman + ".png");
   }
 
+  /* ═══ permalink: the URL scheme printed on the darkroom's cards ═══
+     ?plate=<id>&<LEVER LABEL>=<value>&t=<simT>
+
+       https://prettycloud.io/?plate=e8&MODE=1&4D%20TURN=0.35&t=12.4
+
+     A QR on the back of a physical print resolves here and shows the
+     buyer the living object their print came from - same plate, same
+     lever settings, starting at the printed instant and then MOVING,
+     which is the one thing the paper cannot do. Camera framing is
+     deliberately not carried: the print already chose its view, and
+     here the object should be picked up and turned.
+
+     THIS SCHEME IS LOAD-BEARING AND MUST STAY BACKWARD-COMPATIBLE.
+     Cards are printed objects; they cannot be re-issued when a URL
+     breaks. Plates are addressed by their id slug, which survives
+     reordering; levers by their registry label, which survives new
+     levers being appended. Lever labels are all-caps by convention, so
+     the lowercase keys `plate` and `t` cannot collide. Values are
+     clamped to the lever's own range, so a stale card lands on the
+     nearest thing the plate can still do rather than on garbage. */
+  function applyPermalink() {
+    let q;
+    try { q = new URLSearchParams(location.search); }
+    catch (e) { return; }
+    const id = q.get("plate");
+    if (!id) return;
+    const i = MODES.findIndex(p => p.id === id);
+    if (i < 0) return;
+    const p = MODES[i];
+    p.params.forEach((prm, k) => {
+      if (!q.has(prm.label)) return;
+      const v = parseFloat(q.get(prm.label));
+      if (isFinite(v))
+        Atlas.values[i][k] = Math.min(prm.max, Math.max(prm.min, v));
+    });
+    const t = parseFloat(q.get("t"));
+    if (isFinite(t) && t >= 0) S.simT = t;
+    Atlas.Camera.home(p.cam);
+    if (i !== S.modeB) setMode(i);
+    else Atlas.UI.swapPlateText(i);   /* plate 0: rebuild the lever rack */
+  }
+
   if (!Atlas.Renderer.init(canvas, () => Atlas.UI.showLost())) {
     document.getElementById("lost").classList.add("show");
     return;
@@ -65,6 +107,7 @@
   Atlas.Camera.attach(canvas);
   Atlas.Camera.home(MODES[0].cam);
   canvas.addEventListener("dblclick", () => Atlas.Camera.home(MODES[S.modeB].cam));
+  applyPermalink();
   prewarmNeighbors();
 
   let last = performance.now();
