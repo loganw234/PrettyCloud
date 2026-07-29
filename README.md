@@ -119,3 +119,9 @@ clipped (see plate XII).
   GPU; a desktop GPU (the project was aimed at an RTX 5060 Ti) reaches
   2^23 in about two seconds and holds 60 fps on most plates. 2^27 points
   is real work — expect ~8 GB/s of raster traffic at the top of the lever.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). The plates are mathematics; the mathematics
+belongs to nobody, and this rendering of it is free to use, fork and build
+on.
