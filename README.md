@@ -9,6 +9,18 @@ so **brightness is a Monte-Carlo density estimate of each object's measure**.
 Open `index.html` directly in a browser (no server or build step needed),
 or use the prebuilt single file at `build/atlas-bundled.html`.
 
+## Run it without a checkout
+
+The whole atlas is also published as **one HTML file** with every script and
+stylesheet inlined. Download it from
+[Releases](https://github.com/loganw234/PrettyCloud/releases/latest) and open
+it; that is the entire installation. No build step, no server, no
+dependencies.
+
+Rebuild it yourself with `python atlas/build.py`, which writes
+`atlas/build/atlas-bundled.html`. Fonts and KaTeX are deliberately left as
+CDN links, so fully offline the type falls back and formulas show as plain
+LaTeX. Everything that draws is local.
 ## The plates
 
 Fifty-six in all, spanning topology, chaos, number theory, quantum mechanics, general
