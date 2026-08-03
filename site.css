@@ -122,3 +122,25 @@ footer a { color: var(--dim); }
 #movedX { background: none; border: 0; color: var(--dim); cursor: pointer;
           font-size: 1.3rem; line-height: 1; padding: .1rem .3rem; }
 #movedX:hover { color: var(--ink); }
+
+/* ---- prose in columns on a wide screen -------------------------------
+   A 62rem measure is about 120 characters, which nobody reads
+   comfortably, so the text used to sit at 34rem and stop well short of
+   the figure's right edge. Two columns give the run the figure's full
+   width while each column stays near 60 characters, which is the book's
+   own answer to the same problem on a 17-inch sheet.
+   Below the breakpoint it collapses to one column and the measure rule
+   takes over again. */
+@media (min-width: 62rem) {
+  .prose { columns: 2; column-gap: 2.8rem; }
+  .prose p { max-width: none;
+              /* A PARAGRAPH IS NOT SPLIT ACROSS THE BREAK. In print you
+                 read down and carry on; on screen you jump back up a
+                 whole viewport mid-sentence, which is worse than an
+                 uneven column. These runs are three or four paragraphs,
+                 so keeping them whole balances fine. */
+              break-inside: avoid; }
+  .prose p:first-child { margin-top: 0; }
+  /* a caption under a full-width figure should agree with it too */
+  figcaption { max-width: none; }
+}

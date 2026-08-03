@@ -122,6 +122,7 @@ with real glass in front of it.</p>
   chosen anywhere, are linked exactly once.</figcaption>
 </figure>
 
+<div class="prose">
 <p>The subjects are mathematical objects: fifty-six of them, each a few
 lines of arithmetic rather than a model on a disk. The camera is a
 four-by-five sheet that exists only as a program: the focal length falls
@@ -137,6 +138,7 @@ substituting the nearest survivor.</p>
 
 <p>None of that makes a picture better. It makes it checkable, which is
 a different property and a more useful one.</p>
+</div>
 
 <hr>
 
@@ -176,6 +178,7 @@ PAGES["book.html"] = dict(
 <p class="lede">The instrument, described the way a camera is described,
 including what it refuses to do.</p>
 
+<div class="prose">
 <p>It opens with a video game. Mercenaries 2 stores every bone of every
 model under a 32-bit hash and ships none of the names, and a string that
 collides with one of those hashes will load the bone perfectly while not
@@ -194,6 +197,7 @@ than typed beside it.</p>
 inverted or scaled, every one of them producing a plausible photograph.
 That is the argument for measuring rather than looking, made at my
 own expense.</p>
+</div>
 
 <div class="spec">
   <div class="k">Extent</div><div class="v">62 pages</div>
@@ -278,6 +282,7 @@ PAGES["about.html"] = dict(
 <p class="lede">It began with a video game from 2008 and a set of names
 somebody deleted.</p>
 
+<div class="prose">
 <p>Mercenaries 2 keeps 9,539 bone hashes and no names. The hash is weak
 enough to guess against, so finding a string that produces a given one
 is easy, and I wrote a tool that does exactly that. Feed the engine a
@@ -298,6 +303,7 @@ something that would otherwise look strange about it: it does not draw
 surfaces. It has no polygons and no shading model. It accumulates
 points, one at a time, because it grew out of something written to look
 at a cloud of positions and work out whether they meant anything.</p>
+</div>
 
 <h2>Something can work and not be true</h2>
 <p>A glow added because it looks nice is a colliding string. It works
