@@ -1,0 +1,19 @@
+# This repo had no .gitignore, which is how a Cygwin crash dump and two
+# .pyc files rode in on a `git add -A`. Everything here is a build
+# artefact or machine litter; nothing the site serves.
+
+# Python
+__pycache__/
+*.py[cod]
+
+# NOT ignored: atlas/build/atlas-bundled.html. It is generated, but it
+# is generated ON PURPOSE and shipped - a single self-contained copy of
+# the atlas somebody can save and open offline.
+
+# Cygwin/MSYS crash dumps, from the bash this is often driven through
+*.stackdump
+
+# OS litter
+.DS_Store
+Thumbs.db
+desktop.ini
