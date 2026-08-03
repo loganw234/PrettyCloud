@@ -2,8 +2,33 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<!-- maximum-scale removed: it blocks pinch-zoom, which is the one gesture
+     that matters on a page whose whole content is a picture. iOS has
+     ignored it since 10 for accessibility anyway, so it only ever
+     hobbled Android. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atlas of Mathematical Forms</title>
+<meta name="description" content="Fifty-six mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
+
+<!-- SHARE CARDS. Without these a posted link unfurls as a bare URL - no
+     image, no blurb - which for a page that is entirely a picture is the
+     most expensive thing that can be missing. og:image MUST be absolute;
+     a relative path silently yields no card at all. -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://prettycloud.io/">
+<meta property="og:site_name" content="Atlas of Mathematical Forms">
+<meta property="og:title" content="Atlas of Mathematical Forms">
+<meta property="og:description" content="Fifty-six mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
+<meta property="og:image" content="https://prettycloud.io/og/atlas-card.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Hopf fibration: nested luminous rings in yellow, magenta and blue on black.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Atlas of Mathematical Forms">
+<meta name="twitter:description" content="Fifty-six mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
+<meta name="twitter:image" content="https://prettycloud.io/og/atlas-card.jpg">
+<meta name="twitter:image:alt" content="The Hopf fibration: nested luminous rings in yellow, magenta and blue on black.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
