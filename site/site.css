@@ -1,0 +1,107 @@
+/* The site wears the BOOK's clothes, not the atlas's.
+   The atlas is a dark instrument panel because it is an instrument. This
+   is the printed work's front door, so it takes the book's own values:
+   warm off-white paper, warm near-black ink, Ubuntu and Ubuntu Mono.
+   Anyone who has seen a print or a page should recognise it instantly,
+   and the change of clothes is what tells you which of the two you are
+   looking at. */
+:root {
+  --paper: #f7f5f0;          /* the book's BookPaper, 247 245 240 */
+  --ink:   #1a1814;          /* BookInk, 26 24 20 */
+  --rule:  #c4c0b8;          /* BookRule */
+  --dim:   #6b665c;
+  --mark:  #b4432f;          /* the red the figures mark with */
+  --measure: 34rem;          /* ~66 characters, the book's own target */
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Not an inversion of the book - a darkroom's safelight version of it.
+     Paper that has been dodged rather than a screen that is off. */
+  :root { --paper:#121110; --ink:#e6e2d8; --rule:#3a3730; --dim:#8b857a; }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 17px/1.65 Ubuntu, ui-sans-serif, system-ui, sans-serif;
+  padding: 0 1.5rem env(safe-area-inset-bottom);
+}
+main { max-width: 62rem; margin: 0 auto; padding: 0 0 1.5rem; }
+p, li { max-width: var(--measure); }
+
+a { color: inherit; text-decoration-color: var(--rule);
+    text-underline-offset: .22em; }
+a:hover { text-decoration-color: var(--mark); }
+
+/* ---- the bar ---------------------------------------------------- */
+.bar { display: flex; gap: 1.6rem; align-items: baseline; flex-wrap: wrap;
+       max-width: 62rem; margin: 0 auto; padding: 1.6rem 0 0; }
+.bar .home { font: 400 .78rem/1 "Ubuntu Mono", ui-monospace, monospace;
+             letter-spacing: .34em; text-transform: uppercase;
+             text-decoration: none; }
+.bar nav { margin-left: auto; display: flex; gap: 1.3rem; flex-wrap: wrap; }
+.bar nav a { font: 400 .78rem/1 "Ubuntu Mono", ui-monospace, monospace;
+             letter-spacing: .18em; text-transform: uppercase;
+             color: var(--dim); text-decoration: none; }
+.bar nav a:hover, .bar nav a[aria-current] { color: var(--ink); }
+
+/* ---- type ------------------------------------------------------- */
+h1 { font-weight: 400; font-size: clamp(2.1rem, 6vw, 3.4rem);
+     line-height: 1.06; letter-spacing: -.015em; margin: 3.2rem 0 .6rem; }
+h2 { font-weight: 400; font-size: clamp(1.35rem, 3vw, 1.75rem);
+     line-height: 1.2; margin: 3.4rem 0 .5rem; }
+h3 { font-weight: 400; font-size: 1.05rem; margin: 2.2rem 0 .3rem; }
+.lede { font-size: clamp(1.05rem, 2.2vw, 1.3rem); color: var(--dim);
+        max-width: 38rem; margin: 0 0 2.4rem; }
+
+.label { font: 400 .72rem/1 "Ubuntu Mono", ui-monospace, monospace;
+         letter-spacing: .22em; text-transform: uppercase;
+         color: var(--dim); }
+.mono { font-family: "Ubuntu Mono", ui-monospace, monospace; }
+.note { color: var(--dim); font-size: .92rem; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+
+/* ---- pictures --------------------------------------------------- */
+figure { margin: 2.4rem 0; }
+figure img { width: 100%; height: auto; display: block; background: #08080b; }
+figcaption { margin-top: .6rem; color: var(--dim); font-size: .88rem;
+             max-width: var(--measure); }
+
+/* ---- the one call to action ------------------------------------- */
+.go { display: inline-block; margin: .4rem 1rem .4rem 0;
+      padding: .62rem 1.1rem; border: 1px solid var(--ink);
+      font: 400 .8rem/1 "Ubuntu Mono", ui-monospace, monospace;
+      letter-spacing: .16em; text-transform: uppercase;
+      text-decoration: none; transition: background .18s, color .18s; }
+.go:hover { background: var(--ink); color: var(--paper); }
+.go.quiet { border-color: var(--rule); color: var(--dim); }
+.go.quiet:hover { background: none; border-color: var(--ink);
+                  color: var(--ink); }
+
+/* ---- a specification, set as one ------------------------------- */
+.spec { border-top: 1px solid var(--rule); margin: 2rem 0;
+        display: grid; grid-template-columns: 12rem 1fr; }
+.spec > div { border-bottom: 1px solid var(--rule); padding: .7rem 0; }
+.spec dt, .spec .k { font: 400 .72rem/1.5 "Ubuntu Mono", ui-monospace,
+                     monospace; letter-spacing: .18em;
+                     text-transform: uppercase; color: var(--dim);
+                     padding: .8rem 1rem .8rem 0;
+                     border-bottom: 1px solid var(--rule); }
+.spec dd, .spec .v { margin: 0; padding: .8rem 0;
+                     border-bottom: 1px solid var(--rule); }
+@media (max-width: 34rem) {
+  .spec { grid-template-columns: 1fr; }
+  .spec dt, .spec .k { padding-bottom: 0; border-bottom: 0; }
+  .spec dd, .spec .v { padding-top: .15rem; }
+}
+
+/* ---- the doors, and other short columns ------------------------- */
+.cols { display: grid; gap: 2.2rem 2.6rem; margin: 2.4rem 0;
+        grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.cols p { max-width: none; }
+
+footer { border-top: 1px solid var(--rule); margin-top: 3.2rem;
+         padding: 1.6rem 0 3rem; color: var(--dim); font-size: .85rem;
+         max-width: 62rem; margin-inline: auto; }
+footer a { color: var(--dim); }
