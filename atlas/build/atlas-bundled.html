@@ -15,7 +15,7 @@
      most expensive thing that can be missing. og:image MUST be absolute;
      a relative path silently yields no card at all. -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://prettycloud.io/">
+<meta property="og:url" content="https://prettycloud.io/atlas/">
 <meta property="og:site_name" content="Atlas of Mathematical Forms">
 <meta property="og:title" content="Atlas of Mathematical Forms">
 <meta property="og:description" content="Fifty-six mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
@@ -294,7 +294,7 @@ body.ui-hidden #console, body.ui-hidden #hint, body.ui-hidden #frame {
     <summary>RENDER</summary>
     <div>
       <div id="globalParams"></div>
-      <div id="densWarn">HEAVY DENSITY — EXPECT LOW FPS ON MODEST GPUS</div>
+      <div id="densWarn">HEAVY DENSITY · EXPECT LOW FPS ON MODEST GPUS</div>
       <div class="btns"><button id="pause">PAUSE ▎▎</button><button id="shot">EXPORT PNG</button><button id="shotJson">EXPORT SHOT</button></div>
     </div>
   </details>
@@ -303,7 +303,7 @@ body.ui-hidden #console, body.ui-hidden #hint, body.ui-hidden #frame {
 <div id="hint">DRAG · SCROLL · ← → PLATES · SPACE PAUSE · R RANDOMIZE · S EXPORT · H HIDE</div>
 
 <div id="lost">
-  <div><b>SIGNAL LOST</b><br>THE GPU CONTEXT WAS INTERRUPTED — LOWER THE DENSITY AND RELOAD.</div>
+  <div><b>SIGNAL LOST</b><br>THE GPU CONTEXT WAS INTERRUPTED. LOWER THE DENSITY AND RELOAD.</div>
 </div>
 
 <!-- core: namespace + shared GLSL -->
@@ -1062,7 +1062,7 @@ Atlas.registerPlate({
   accent: "#ffcf8f",
   tex: "\\rho(w)\\;\\propto\\!\\!\\sum_{c:\\,\\text{escapes}}\\;\\#\\{n:\\,z_n(c)=w\\},\\qquad z_{n+1}=z_n^2+c",
   plain: "ρ(w) ∝ # of escaping orbits zₙ₊₁ = zₙ² + c that visit w",
-  caption: "Not the Mandelbrot set but its ghost. Take every point c whose orbit escapes, and record where those orbits wandered before they left. Each point here is one uniformly-chosen stop along one escaping trajectory — reservoir-sampled in a single pass — so brightness is exactly the density of visitation, the measure the escaping dynamics leave behind. The prisoners (the set itself) are invisible; only the paths of the free show. MIN ESCAPE hollows out the quick escapers to reveal the deep filaments.",
+  caption: "Not the Mandelbrot set but its ghost. Take every point c whose orbit escapes, and record where those orbits wandered before they left. Each point here is one uniformly-chosen stop along one escaping trajectory, reservoir-sampled in a single pass, so brightness is exactly the density of visitation, the measure the escaping dynamics leave behind. The prisoners (the set itself) are invisible; only the paths of the free show. MIN ESCAPE hollows out the quick escapers to reveal the deep filaments.",
   cam: { dist: 3.2, pitch: 0.62, tgtY: 0.0, rot: 0.02 },
   gain: 0.7,
   params: [
@@ -1119,7 +1119,7 @@ Atlas.registerPlate({
   accent: "#7ad9c4",
   tex: "\\dot{\\mathbf{x}} = \\mathbf{f}(\\mathbf{x}),\\qquad \\text{Lorenz: }\\dot x=\\sigma(y-x),\\;\\dot y=x(\\rho-z)-y,\\;\\dot z=xy-\\beta z",
   plain: "ẋ = f(x)   (Lorenz: ẋ=σ(y−x), ẏ=x(ρ−z)−y, ż=xy−βz)",
-  caption: "Continuous-time chaos. A cloud of initial conditions is integrated forward by Runge–Kutta; each forgets where it began and settles onto the attractor, so brightness is the SRB measure — the long-run fraction of time the flow spends in each region. One dial walks a whole zoo: Lorenz's butterfly, Rössler's scroll, the Aizawa torus-knot, Thomas's cyclic lattice, Halvorsen's braid, Chua's double scroll. Colour reads local speed; the bright cores are where the flow lingers.",
+  caption: "Continuous-time chaos. A cloud of initial conditions is integrated forward by Runge–Kutta; each forgets where it began and settles onto the attractor, so brightness is the SRB measure: the long-run fraction of time the flow spends in each region. One dial walks a whole zoo: Lorenz's butterfly, Rössler's scroll, the Aizawa torus-knot, Thomas's cyclic lattice, Halvorsen's braid, Chua's double scroll. Colour reads local speed; the bright cores are where the flow lingers.",
   cam: { dist: 3.4, pitch: 0.20, tgtY: 0.0, rot: 0.05 },
   gain: 0.55,
   params: [
@@ -1202,7 +1202,7 @@ Atlas.registerPlate({
   accent: "#9fd0ff",
   tex: "\\psi_{n\\ell m}(r,\\theta,\\phi)=R_{n\\ell}(r)\\,Y_\\ell^{m}(\\theta,\\phi),\\qquad \\rho=|\\psi_{n\\ell m}|^2",
   plain: "ψₙₗₘ = Rₙₗ(r)·Yₗᵐ(θ,φ),   ρ = |ψₙₗₘ|²",
-  caption: "The electron, seen honestly — not as a dot on an orbit but as a probability density. Each point is a genuine sample drawn from |ψ|²: the radius is importance-sampled from the Rₙₗ envelope so the accepted cloud is the exact quantum distribution, radial nodes and all. Where the wavefunction vanishes, the cloud goes dark — the spherical shells of the s-states, the pinched waists of the p's and d's. Warm and cool lobes carry the sign of ψ. Dial n, ℓ, m by hand; the whole periodic table of shapes is in there.",
+  caption: "The electron, seen honestly: not as a dot on an orbit but as a probability density. Each point is a genuine sample drawn from |ψ|²: the radius is importance-sampled from the Rₙₗ envelope so the accepted cloud is the exact quantum distribution, radial nodes and all. Where the wavefunction vanishes, the cloud goes dark: the spherical shells of the s-states, the pinched waists of the p's and d's. Warm and cool lobes carry the sign of ψ. Dial n, ℓ, m by hand; the whole periodic table of shapes is in there.",
   cam: { dist: 3.0, pitch: 0.24, tgtY: 0.0, rot: 0.05 },
   gain: 1.0,
   params: [
@@ -1274,7 +1274,7 @@ Atlas.registerPlate({
   accent: "#b6e08f",
   tex: "\\text{Gyroid: }\\;\\sin x\\cos y+\\sin y\\cos z+\\sin z\\cos x=c",
   plain: "Gyroid:  sin x cos y + sin y cos z + sin z cos x = c",
-  caption: "A surface that tiles space, curving everywhere yet flat on average — mean curvature zero at every point. These triply-periodic minimal surfaces are what soap films, block copolymers and butterfly-wing photonic crystals settle into. Points are sampled through a block of unit cells and then Newton-projected straight onto the level set, so almost none are wasted and brightness traces the surface's own area. The LEVEL dial thickens or opens the labyrinth; SLAB CUT shears the block away so you can see inside the weave. Colour is the surface normal.",
+  caption: "A surface that tiles space, curving everywhere yet flat on average, with mean curvature zero at every point. These triply-periodic minimal surfaces are what soap films, block copolymers and butterfly-wing photonic crystals settle into. Points are sampled through a block of unit cells and then Newton-projected straight onto the level set, so almost none are wasted and brightness traces the surface's own area. The LEVEL dial thickens or opens the labyrinth; SLAB CUT shears the block away so you can see inside the weave. Colour is the surface normal.",
   cam: { dist: 3.2, pitch: 0.28, tgtY: 0.0, rot: 0.05 },
   gain: 0.85,
   params: [
@@ -1332,7 +1332,7 @@ Atlas.registerPlate({
   accent: "#f6a6ff",
   tex: "z\\mapsto C_k+\\dfrac{r_k^2\\,(z-C_k)}{|z-C_k|^2},\\qquad \\Lambda=\\overline{\\langle\\text{inversions}\\rangle\\cdot z_0}",
   plain: "z ↦ Cₖ + rₖ²(z−Cₖ)/|z−Cₖ|²   (limit set of the inversion group)",
-  caption: "Reflect a point in one of a ring of circles, chosen at random, and repeat forever. The orbit is drawn onto the limit set of the group the circles generate — a self-similar necklace where every pearl is fringed by smaller pearls, the fractal that Klein glimpsed and Mandelbrot rendered. At tangency the circles kiss and the gasket condenses; the RADIUS dial walks it from scattered dust through the perfect gasket to overlap. The whole thing is wrapped back onto a sphere by inverse stereographic projection so it turns in space.",
+  caption: "Reflect a point in one of a ring of circles, chosen at random, and repeat forever. The orbit is drawn onto the limit set of the group the circles generate, a self-similar necklace where every pearl is fringed by smaller pearls, the fractal that Klein glimpsed and Mandelbrot rendered. At tangency the circles kiss and the gasket condenses; the RADIUS dial walks it from scattered dust through the perfect gasket to overlap. The whole thing is wrapped back onto a sphere by inverse stereographic projection so it turns in space.",
   cam: { dist: 3.2, pitch: 0.20, tgtY: 0.0, rot: 0.06 },
   gain: 0.7,
   params: [
@@ -1384,7 +1384,7 @@ Atlas.registerPlate({
   accent: "#ffe08a",
   tex: "\\text{envelope of }\\{L_s\\}:\\quad F(x,y,s)=0,\\;\\partial_s F=0",
   plain: "envelope of a family of rays: F(x,y,s)=0, ∂F/∂s=0",
-  caption: "The bright cusp of light in the bottom of a coffee cup. Nowhere is any single ray special — but where a whole family of rays crowds together, the light piles up, and the envelope ignites on its own. Nothing here computes the caustic curve; each point is just one spot on one ray, and the caustic emerges purely as the density where neighbouring rays overlap. This is the plate's whole thesis in its purest form: brightness is measure. Reflect off a circle for the nephroid and cardioid, slide a ladder for the astroid, draw chords for the rest.",
+  caption: "The bright cusp of light in the bottom of a coffee cup. Nowhere is any single ray special, but where a whole family of rays crowds together, the light piles up, and the envelope ignites on its own. Nothing here computes the caustic curve; each point is just one spot on one ray, and the caustic emerges purely as the density where neighbouring rays overlap. This is the plate's whole thesis in its purest form: brightness is measure. Reflect off a circle for the nephroid and cardioid, slide a ladder for the astroid, draw chords for the rest.",
   cam: { dist: 3.0, pitch: 0.55, tgtY: 0.0, rot: 0.02 },
   gain: 0.8,
   params: [
@@ -1436,7 +1436,7 @@ Atlas.registerPlate({
   accent: "#ff9e7a",
   tex: "x_{n+1}=r\\,x_n(1-x_n),\\qquad \\lambda=\\lim_{N\\to\\infty}\\tfrac1N\\sum_{n}\\ln|r(1-2x_n)|",
   plain: "xₙ₊₁ = r xₙ(1−xₙ),   λ = ⟨ ln|r(1−2xₙ)| ⟩",
-  caption: "Turn one dial, r, and watch a fixed point split in two, then four, then eight — period doubling accelerating by Feigenbaum's universal ratio until, at r ≈ 3.5699, order dissolves into chaos. The horizontal axis is r; the vertical is where the map's orbit lands, so brightness is the invariant density — the bright chaotic bands with their square-root edges, threaded by white windows of returning order. Depth and colour read the Lyapunov exponent: cool where the map forgets perturbations, warm where it amplifies them.",
+  caption: "Turn one dial, r, and watch a fixed point split in two, then four, then eight, period doubling accelerating by Feigenbaum's universal ratio until, at r ≈ 3.5699, order dissolves into chaos. The horizontal axis is r; the vertical is where the map's orbit lands, so brightness is the invariant density: the bright chaotic bands with their square-root edges, threaded by white windows of returning order. Depth and colour read the Lyapunov exponent: cool where the map forgets perturbations, warm where it amplifies them.",
   cam: { dist: 3.3, pitch: 0.18, tgtY: 0.0, rot: 0.03 },
   gain: 0.75,
   params: [
@@ -1484,7 +1484,7 @@ Atlas.registerPlate({
   accent: "#8fb8ff",
   tex: "p_{n+1}=p_n+\\tfrac{K}{2\\pi}\\sin 2\\pi\\theta_n,\\qquad \\theta_{n+1}=\\theta_n+p_{n+1}\\ (\\mathrm{mod}\\ 1)",
   plain: "pₙ₊₁ = pₙ + (K/2π) sin 2πθₙ,   θₙ₊₁ = θₙ + pₙ₊₁ (mod 1)",
-  caption: "The simplest window into Hamiltonian chaos: a rotor given a periodic kick. At each kick strength K the phase plane divides itself, and the density does the sorting for free — regular orbits trace razor-thin invariant curves (the surviving KAM tori), while chaotic ones smear into a dim area-filling sea. As K climbs past 0.9716 the last golden torus breaks and the seas merge. A tangent vector carried along each orbit measures the finite-time Lyapunov exponent: cool where motion is ordered, hot where it is mixing.",
+  caption: "The simplest window into Hamiltonian chaos: a rotor given a periodic kick. At each kick strength K the phase plane divides itself, and the density does the sorting for free: regular orbits trace razor-thin invariant curves (the surviving KAM tori), while chaotic ones smear into a dim area-filling sea. As K climbs past 0.9716 the last golden torus breaks and the seas merge. A tangent vector carried along each orbit measures the finite-time Lyapunov exponent: cool where motion is ordered, hot where it is mixing.",
   cam: { dist: 3.2, pitch: 0.75, tgtY: 0.0, rot: 0.02 },
   gain: 0.7,
   params: [
@@ -1536,7 +1536,7 @@ Atlas.registerPlate({
   accent: "#c0b0ff",
   tex: "w=f(z):\\quad \\text{height}=\\log|f|,\\quad \\text{hue}=\\arg f",
   plain: "w = f(z):   height = log|f|,   hue = arg f",
-  caption: "A complex function has no graph you can draw — its input and output each need a plane. So paint the input: at every point z, the hue names the direction of f(z) and the height is log|f(z)|. Zeros become pits where all colours meet, poles become spires, and the winding of hue around each counts its order. Here are z³−1's three-fold pinwheel, a rational map's zeros and poles, the gamma function's marching poles at the negative integers, and Weierstrass's ℘ with its double poles on a lattice.",
+  caption: "A complex function has no graph you can draw: its input and output each need a plane. So paint the input: at every point z, the hue names the direction of f(z) and the height is log|f(z)|. Zeros become pits where all colours meet, poles become spires, and the winding of hue around each counts its order. Here are z³−1's three-fold pinwheel, a rational map's zeros and poles, the gamma function's marching poles at the negative integers, and Weierstrass's ℘ with its double poles on a lattice.",
   cam: { dist: 3.4, pitch: 0.5, tgtY: 0.25, rot: 0.03 },
   gain: 0.9,
   params: [
@@ -1617,7 +1617,7 @@ Atlas.registerPlate({
   accent: "#a0e0d0",
   tex: "\\rho_{\\text{sc}}(x)=\\tfrac{2}{\\pi}\\sqrt{1-x^2},\\qquad \\text{Ginibre: }|\\lambda|^2\\stackrel{d}{=}\\tfrac1N\\,\\Gamma(k)",
   plain: "Wigner: ρ(x) = (2/π)√(1−x²);   Ginibre: |λ|² ~ Γ(k)/N",
-  caption: "Fill a large matrix with random numbers and its eigenvalues, astonishingly, obey a law. A symmetric matrix gives Wigner's semicircle; a matrix with no symmetry at all gives Ginibre's uniform disk with its razor circular edge; a covariance matrix gives Marchenko–Pastur. None of these is simulated by diagonalizing — each ensemble is drawn from its exact finite-N law (Ginibre by Kostlan's theorem, the others by their inverse spectral CDF), so brightness is the limiting spectral measure itself.",
+  caption: "Fill a large matrix with random numbers and its eigenvalues, astonishingly, obey a law. A symmetric matrix gives Wigner's semicircle; a matrix with no symmetry at all gives Ginibre's uniform disk with its razor circular edge; a covariance matrix gives Marchenko–Pastur. None of these is simulated by diagonalizing. Each ensemble is drawn from its exact finite-N law (Ginibre by Kostlan's theorem, the others by their inverse spectral CDF), so brightness is the limiting spectral measure itself.",
   cam: { dist: 3.2, pitch: 0.42, tgtY: 0.0, rot: 0.03 },
   gain: 0.8,
   params: [
@@ -1675,7 +1675,7 @@ Atlas.registerPlate({
   accent: "#ff8fbf",
   tex: "z\\;\\mapsto\\;\\pm\\sqrt{z-c}\\quad(\\text{random sign}),\\qquad J_c=\\overline{\\{\\text{backward orbit}\\}}",
   plain: "z ↦ ±√(z−c)  (random branch),   Jc = closure of the backward orbit",
-  caption: "The Julia set of z²+c is where forward orbits are chaotic — impossible to hit by iterating forwards. But run the map backwards: each point has two preimages, ±√(z−c), and choosing between them at random is a chaos game whose attractor is exactly the Julia set. A few steps and every point lands on it, no matter where it started. Steer c across the plane and the set breathes — connected dendrites and rabbits while c sits inside the Mandelbrot set, exploding into dust the moment it leaves.",
+  caption: "The Julia set of z²+c is where forward orbits are chaotic, impossible to hit by iterating forwards. But run the map backwards: each point has two preimages, ±√(z−c), and choosing between them at random is a chaos game whose attractor is exactly the Julia set. A few steps and every point lands on it, no matter where it started. Steer c across the plane and the set breathes: connected dendrites and rabbits while c sits inside the Mandelbrot set, exploding into dust the moment it leaves.",
   cam: { dist: 3.2, pitch: 0.28, tgtY: 0.0, rot: 0.05 },
   gain: 0.7,
   params: [
@@ -1720,7 +1720,7 @@ Atlas.registerPlate({
   accent: "#b8a0ff",
   tex: "\\{\\pm1\\}^4\\;(\\text{tesseract}),\\;\\{\\pm e_i\\}\\;(\\text{16-cell}),\\;\\text{perm}(\\pm1,\\pm1,0,0)\\;(\\text{24-cell})",
   plain: "tesseract {±1}⁴, 16-cell {±eᵢ}, 24-cell perms of (±1,±1,0,0)",
-  caption: "Four-dimensional space holds six regular solids where three dimensions hold five. These are three of them, turning through planes we cannot picture and casting their shadows down into space — each point rides along an edge while the whole figure rotates in two independent 4-planes at once. The self-intersections are only in the shadow; upstairs in 4D the edges never touch. Hue carries the fourth coordinate w, so you can watch cells swing toward you out of the fourth dimension and recede back into it.",
+  caption: "Four-dimensional space holds six regular solids where three dimensions hold five. These are three of them, turning through planes we cannot picture and casting their shadows down into space. Each point rides along an edge while the whole figure rotates in two independent 4-planes at once. The self-intersections are only in the shadow; upstairs in 4D the edges never touch. Hue carries the fourth coordinate w, so you can watch cells swing toward you out of the fourth dimension and recede back into it.",
   cam: { dist: 3.4, pitch: 0.15, tgtY: 0.0, rot: 0.0 },
   gain: 0.7,
   params: [
@@ -1794,8 +1794,8 @@ Atlas.registerPlate({
   roman: "XXV",
   accent: "#ffb84d",
   tex: "z_{n+1}=z_n-a\\,\\dfrac{z_n^{\\,d}-1}{d\\,z_n^{\\,d-1}},\\qquad \\text{basins of the }d\\text{ roots of unity}",
-  plain: "zₙ₊₁ = zₙ − a (zᵈ−1)/(d zᵈ⁻¹)   — basins of the d-th roots of unity",
-  caption: "Drop Newton's root-finder onto the complex plane and ask, from each starting point, which root it runs to. The answer partitions the plane into basins — but their boundary is no curve. It is a fractal where all d basins meet at once, so that between any two colours you always find the third: the Wada property made visible. Iteration count becomes relief, so the ridges rise along the boundary where the method dithers. Over-relaxation a ≠ 1 shears the whole structure into spirals.",
+  plain: "zₙ₊₁ = zₙ − a (zᵈ−1)/(d zᵈ⁻¹)   ·  basins of the d-th roots of unity",
+  caption: "Drop Newton's root-finder onto the complex plane and ask, from each starting point, which root it runs to. The answer partitions the plane into basins, but their boundary is no curve. It is a fractal where all d basins meet at once, so that between any two colours you always find the third: the Wada property made visible. Iteration count becomes relief, so the ridges rise along the boundary where the method dithers. Over-relaxation a ≠ 1 shears the whole structure into spirals.",
   cam: { dist: 3.4, pitch: 0.5, tgtY: 0.2, rot: 0.03 },
   gain: 0.9,
   params: [
@@ -1849,7 +1849,7 @@ Atlas.registerPlate({
   accent: "#ff7a6a",
   tex: "\\mathbf{z}\\mapsto \\mathbf{z}^{\\,n}+\\mathbf{c},\\quad (r,\\theta,\\phi)^n=(r^n,\\,n\\theta,\\,n\\phi)",
   plain: "z ↦ zⁿ + c,   with (r,θ,φ)ⁿ = (rⁿ, nθ, nφ)  (spherical power)",
-  caption: "There is no true three-dimensional analogue of complex multiplication — but if you invent one by raising spherical coordinates to a power, twisting the angles and stretching the radius, the escape-time set of z⁸+c grows this bulbous, fractally-encrusted planet. Every point is a random probe of space: quick escapers are discarded, the boundary shell blazes, and the trapped interior glows dim. Raise the power to sprout more lobes, or switch to Julia mode and drift the constant c to melt the whole world into new forms.",
+  caption: "There is no true three-dimensional analogue of complex multiplication, but if you invent one by raising spherical coordinates to a power, twisting the angles and stretching the radius, the escape-time set of z⁸+c grows this bulbous, fractally-encrusted planet. Every point is a random probe of space: quick escapers are discarded, the boundary shell blazes, and the trapped interior glows dim. Raise the power to sprout more lobes, or switch to Julia mode and drift the constant c to melt the whole world into new forms.",
   cam: { dist: 3.0, pitch: 0.22, tgtY: 0.0, rot: 0.05 },
   gain: 0.6,
   params: [
@@ -1904,7 +1904,7 @@ Atlas.registerPlate({
   accent: "#8fe0c8",
   tex: "\\text{Klein bottle},\\;\\text{Roman surface }(bc,ca,ab),\\;\\text{cross-cap}",
   plain: "Klein bottle;   Roman surface (bc, ca, ab);   cross-cap",
-  caption: "Surfaces with only one side. A Klein bottle has no inside and no outside — its neck passes through its own wall to close up in a way that only truly fits in four dimensions, so in three it must self-intersect. The Roman and cross-cap surfaces are the projective plane forced into our space the same way. The creases where a surface passes through itself show up bright, because two sheets of points pile into the same place: the doubled density is the immersion's scar. CUTAWAY peels the skin back so you can follow the neck inside.",
+  caption: "Surfaces with only one side. A Klein bottle has no inside and no outside: its neck passes through its own wall to close up in a way that only truly fits in four dimensions, so in three it must self-intersect. The Roman and cross-cap surfaces are the projective plane forced into our space the same way. The creases where a surface passes through itself show up bright, because two sheets of points pile into the same place: the doubled density is the immersion's scar. CUTAWAY peels the skin back so you can follow the neck inside.",
   cam: { dist: 3.2, pitch: 0.26, tgtY: 0.0, rot: 0.05 },
   gain: 0.85,
   params: [
@@ -1954,7 +1954,7 @@ Atlas.registerPlate({
   accent: "#e0c890",
   tex: "\\Lambda=\\{\\pi_\\parallel(\\mathbf n):\\ \\mathbf n\\in\\mathbb Z^k,\\ \\pi_\\perp(\\mathbf n)\\in W\\}",
   plain: "Λ = { π∥(n) : n ∈ ℤᵏ, π⊥(n) ∈ window }",
-  caption: "Order without repetition. Take a periodic lattice in a higher-dimensional space, tilt it, and project its points down into the plane — but keep only those whose shadow in the hidden directions lands inside a window. The survivors form a quasicrystal: fivefold, eightfold, any forbidden symmetry you like, patterned everywhere yet never once repeating. This is exactly rejection sampling, which is exactly what this atlas does with light, so the pattern condenses naturally. The hidden coordinate can be lifted into the third dimension to reveal the slice the plane was cut from.",
+  caption: "Order without repetition. Take a periodic lattice in a higher-dimensional space, tilt it, and project its points down into the plane, but keep only those whose shadow in the hidden directions lands inside a window. The survivors form a quasicrystal: fivefold, eightfold, any forbidden symmetry you like, patterned everywhere yet never once repeating. This is exactly rejection sampling, which is exactly what this atlas does with light, so the pattern condenses naturally. The hidden coordinate can be lifted into the third dimension to reveal the slice the plane was cut from.",
   cam: { dist: 3.2, pitch: 0.32, tgtY: 0.0, rot: 0.04 },
   gain: 0.75,
   params: [
@@ -2001,7 +2001,7 @@ Atlas.registerPlate({
   accent: "#ffd08a",
   tex: "n\\mapsto(\\sqrt n,\\,2\\pi\\sqrt n),\\qquad a+bi\\ \\text{prime in }\\mathbb Z[i]",
   plain: "Sacks: n ↦ (√n, 2π√n);   Gaussian primes a+bi in ℤ[i]",
-  caption: "Lay the whole numbers down a spiral and light only the primes. Ulam noticed the lamps fall on diagonals; on Sacks's square-root spiral those diagonals become sweeping curves, each the trace of a prime-rich quadratic like n²+n+41. The primes are not random — they are forbidden from being periodic and yet riddled with structure, and here that structure is simply visible. Switch to the Gaussian integers and the one-dimensional mystery opens into a fourfold constellation of primes in the complex lattice.",
+  caption: "Lay the whole numbers down a spiral and light only the primes. Ulam noticed the lamps fall on diagonals; on Sacks's square-root spiral those diagonals become sweeping curves, each the trace of a prime-rich quadratic like n²+n+41. The primes are not random. They are forbidden from being periodic and yet riddled with structure, and here that structure is simply visible. Switch to the Gaussian integers and the one-dimensional mystery opens into a fourfold constellation of primes in the complex lattice.",
   cam: { dist: 3.4, pitch: 0.7, tgtY: 0.0, rot: 0.04 },
   gain: 0.9,
   params: [
@@ -2067,7 +2067,7 @@ Atlas.registerPlate({
   accent: "#a8e08f",
   tex: "n\\mapsto\\begin{cases}n/2 & n\\text{ even}\\\\ 3n+1 & n\\text{ odd}\\end{cases},\\qquad \\text{does every }n\\to1?",
   plain: "n → n/2 (even) or 3n+1 (odd);   does every n reach 1?",
-  caption: "The simplest unsolved problem in mathematics. Halve it if even, triple-plus-one if odd, and every number ever tested comes tumbling down to 1 — but no one can prove it always does. Draw each number's descent as a path, bending one way at an even step and the other at an odd one, and align them all at their shared destination. The common tails braid together and the millions of trajectories grow into a single organic coral, the shape of a conjecture no proof has yet reached.",
+  caption: "The simplest unsolved problem in mathematics. Halve it if even, triple-plus-one if odd, and every number ever tested comes tumbling down to 1, but no one can prove it always does. Draw each number's descent as a path, bending one way at an even step and the other at an odd one, and align them all at their shared destination. The common tails braid together and the millions of trajectories grow into a single organic coral, the shape of a conjecture no proof has yet reached.",
   cam: { dist: 3.2, pitch: 0.2, tgtY: 0.3, rot: 0.03 },
   gain: 0.8,
   params: [
@@ -2119,8 +2119,8 @@ Atlas.registerPlate({
   roman: "XXXI",
   accent: "#9fc0ff",
   tex: "S_N=\\sum_{i=1}^N X_i\\ \\xrightarrow{\\ d\\ }\\ \\mathcal N(0,N),\\qquad \\text{unless }X_i\\ \\text{is heavy-tailed}",
-  plain: "Sₙ = ΣXᵢ → Normal(0, N)   — unless the steps are heavy-tailed",
-  caption: "Add enough small independent shoves and the total is Gaussian, no matter what the shoves looked like — the central limit theorem, the reason the bell curve is everywhere. Watch it build: each point is a partial sum after some number of coin flips, stacked by row, and the density at the bottom is the binomial collapsing onto the Normal. Bias the coin to lean it; switch to a Cauchy step and the theorem fails outright — the tails never tame and no bell forms. In walk mode the same increments trace Brownian and Lévy paths in space.",
+  plain: "Sₙ = ΣXᵢ → Normal(0, N)   ·  unless the steps are heavy-tailed",
+  caption: "Add enough small independent shoves and the total is Gaussian, no matter what the shoves looked like: the central limit theorem, the reason the bell curve is everywhere. Watch it build: each point is a partial sum after some number of coin flips, stacked by row, and the density at the bottom is the binomial collapsing onto the Normal. Bias the coin to lean it; switch to a Cauchy step and the theorem fails outright: the tails never tame and no bell forms. In walk mode the same increments trace Brownian and Lévy paths in space.",
   cam: { dist: 3.2, pitch: 0.3, tgtY: 0.0, rot: 0.03 },
   gain: 0.8,
   params: [
@@ -2194,7 +2194,7 @@ Atlas.registerPlate({
   accent: "#c8a0ff",
   tex: "\\text{harmonograph},\\ \\text{hypotrochoid},\\ \\text{Lissajous},\\ (p,q)\\text{-torus knot}",
   plain: "harmonograph · hypotrochoid · Lissajous · (p,q) torus knot",
-  caption: "A closing gallery of curves that draw themselves. A harmonograph hangs a pen from decaying pendulums and lets their beats interfere; a spirograph rolls one circle inside another; a Lissajous figure listens to two tones at once; a torus knot winds p times one way and q the other and cannot be untied. Each is a single point swept by a parameter, given a little thickness so it reads as a filament in space, and brightness follows the pace — bright where the curve lingers, faint where it hurries. Every knob is a frequency; almost any setting hides something worth keeping.",
+  caption: "A closing gallery of curves that draw themselves. A harmonograph hangs a pen from decaying pendulums and lets their beats interfere; a spirograph rolls one circle inside another; a Lissajous figure listens to two tones at once; a torus knot winds p times one way and q the other and cannot be untied. Each is a single point swept by a parameter, given a little thickness so it reads as a filament in space, and brightness follows the pace: bright where the curve lingers, faint where it hurries. Every knob is a frequency; almost any setting hides something worth keeping.",
   cam: { dist: 3.2, pitch: 0.25, tgtY: 0.0, rot: 0.06 },
   gain: 0.85,
   params: [
@@ -2247,7 +2247,7 @@ Atlas.registerPlate({
   accent: "#8fe0d0",
   tex: "v' = v - 2(v\\cdot n)\\,n,\\qquad \\frac{1}{T}\\int_0^{T} f(\\varphi_t x)\\,dt \\;\\longrightarrow\\; \\frac{1}{|Q|}\\int_Q f\\,dA",
   plain: "v′ = v − 2(v·n)n,   (1/T)∫₀ᵀ f(φₜx)dt → (1/|Q|)∫_Q f dA",
-  caption: "A free particle bounces specularly inside a table; TABLE chooses its universe. Circle and ellipse are integrable: a conserved quantity pins every chord tangent to a caustic — an inner ring, or a confocal ellipse or hyperbola according as the chord misses or crosses the segment between the foci — so no orbit ever fills the table, and the caustics ignite as density piles onto them. The Bunimovich stadium and Sinai's square-with-disk are proven ergodic (Bunimovich 1974–79, Sinai 1970): a generic orbit fills the table, and brightness — literally the orbit family's time average — goes flat. Colour names the conserved quantity, or the launch angle; push AIM toward tangency for whispering-gallery orbits.",
+  caption: "A free particle bounces specularly inside a table; TABLE chooses its universe. Circle and ellipse are integrable: a conserved quantity pins every chord tangent to a caustic: an inner ring, or a confocal ellipse or hyperbola according as the chord misses or crosses the segment between the foci, so no orbit ever fills the table, and the caustics ignite as density piles onto them. The Bunimovich stadium and Sinai's square-with-disk are proven ergodic (Bunimovich 1974–79, Sinai 1970): a generic orbit fills the table, and brightness, literally the orbit family's time average, goes flat. Colour names the conserved quantity, or the launch angle; push AIM toward tangency for whispering-gallery orbits.",
   cam: { dist: 3.0, pitch: 0.9, tgtY: 0.0, rot: 0.03 },
   gain: 0.85,
   params: [
@@ -2559,7 +2559,7 @@ Atlas.registerPlate({
   accent: "#c0e068",
   tex: "x_{n+1}=r_n x_n(1-x_n),\\quad r_n\\in\\{a,b\\},\\qquad \\lambda=\\tfrac1N\\sum_{n}\\ln|r_n(1-2x_n)|",
   plain: "xₙ₊₁ = rₙxₙ(1−xₙ),  rₙ ∈ {a,b},   λ = ⟨ ln|rₙ(1−2xₙ)| ⟩",
-  caption: "Drive the logistic map with two growth rates a and b taken in turns, the rhythm set by SEQUENCE. At each point (a, b) the Lyapunov exponent λ averages ln|rₙ(1−2xₙ)| over STEPS iterations: where alternation tames the map, λ < 0, and the swallow-shaped bays of stability rise as gold hills of height −λ, scaled by HEIGHT; the chaotic sea lies low, blue and dim. Every point is one uniform sample of the parameter square — density adds no structure here; the sculpture is the graph of λ. Along the diagonal a = b runs the cascade of Plate XIX. Markus charted these in 1989; Dewdney's 1991 column made them famous.",
+  caption: "Drive the logistic map with two growth rates a and b taken in turns, the rhythm set by SEQUENCE. At each point (a, b) the Lyapunov exponent λ averages ln|rₙ(1−2xₙ)| over STEPS iterations: where alternation tames the map, λ < 0, and the swallow-shaped bays of stability rise as gold hills of height −λ, scaled by HEIGHT; the chaotic sea lies low, blue and dim. Every point is one uniform sample of the parameter square: density adds no structure here; the sculpture is the graph of λ. Along the diagonal a = b runs the cascade of Plate XIX. Markus charted these in 1989; Dewdney's 1991 column made them famous.",
   cam: { dist: 3.4, pitch: 0.55, tgtY: 0.25, rot: 0.03 },
   gain: 0.9,
   params: [
@@ -2638,7 +2638,7 @@ Atlas.registerPlate({
   accent: "#ffd070",
   tex: "\\ddot{\\mathbf{x}}_i=\\sum_{j\\ne i}\\frac{\\mathbf{x}_j-\\mathbf{x}_i}{\\lVert\\mathbf{x}_j-\\mathbf{x}_i\\rVert^{3}},\\qquad T=6.32591398",
   plain: "ẍᵢ = Σ_{j≠i} (xⱼ−xᵢ)/‖xⱼ−xᵢ‖³,   T = 6.32591398",
-  caption: "Three equal masses under Newtonian gravity — the problem Poincaré showed admits no general closed-form solution. Each point carries the exact initial conditions through a Runge–Kutta integration to a random fraction of the period, so brightness is dwell time: the slow arcs of the choreography glow brightest. MODE 0 is the figure-eight, found numerically by Moore in 1993 and proven by Chenciner and Montgomery in 2000 — one of the few known stable periodic three-body orbits. MODE 1 is Lagrange's rotating equilateral triangle of 1772, exact but unstable for equal masses: raise PERTURB and the nudge that merely thickens the eight scatters the triangle into escape. TIME LIFT unrolls time upward.",
+  caption: "Three equal masses under Newtonian gravity, the problem Poincaré showed admits no general closed-form solution. Each point carries the exact initial conditions through a Runge–Kutta integration to a random fraction of the period, so brightness is dwell time: the slow arcs of the choreography glow brightest. MODE 0 is the figure-eight, found numerically by Moore in 1993 and proven by Chenciner and Montgomery in 2000, one of the few known stable periodic three-body orbits. MODE 1 is Lagrange's rotating equilateral triangle of 1772, exact but unstable for equal masses: raise PERTURB and the nudge that merely thickens the eight scatters the triangle into escape. TIME LIFT unrolls time upward.",
   cam: { dist: 3.1, pitch: 0.5, tgtY: 0.0, rot: 0.03 },
   gain: 0.85,
   params: [
@@ -2775,7 +2775,7 @@ Atlas.registerPlate({
   accent: "#ff9a70",
   tex: "\\frac{d^{2}u}{d\\varphi^{2}} = -u + 3u^{2},\\qquad u=\\frac{GM}{c^{2}r},\\qquad b_{c}=3\\sqrt{3}\\,\\frac{GM}{c^{2}}",
   plain: "d²u/dφ² = −u + 3u²,   u = GM/(c²r),   b_c = 3√3 GM/c²",
-  caption: "Parallel light falls past a black hole, each ray integrating the exact null geodesic equation. Distant rays bend by Einstein's 4GM/c²b — the 1.75 arcseconds Eddington measured at the solar limb in 1919. Approaching the critical impact parameter b_c = 3√3 GM/c², they wind ever longer around the unstable circular orbit at r = 3GM/c², then escape pale gold or plunge ember red. Each point is one instant of one ray, laid down uniformly in orbital angle, so brightness measures the winding angle light spends at each radius: the photon sphere ignites by density alone. PLANE 3D fans the orbit planes into the shell whose apparent diameter, 2√27 GM/c², the Event Horizon Telescope resolved around M87*.",
+  caption: "Parallel light falls past a black hole, each ray integrating the exact null geodesic equation. Distant rays bend by Einstein's 4GM/c²b, the 1.75 arcseconds Eddington measured at the solar limb in 1919. Approaching the critical impact parameter b_c = 3√3 GM/c², they wind ever longer around the unstable circular orbit at r = 3GM/c², then escape pale gold or plunge ember red. Each point is one instant of one ray, laid down uniformly in orbital angle, so brightness measures the winding angle light spends at each radius: the photon sphere ignites by density alone. PLANE 3D fans the orbit planes into the shell whose apparent diameter, 2√27 GM/c², the Event Horizon Telescope resolved around M87*.",
   cam: { dist: 3.2, pitch: 0.35, tgtY: 0.0, rot: 0.04 },
   gain: 0.9,
   params: [
@@ -2929,7 +2929,7 @@ Atlas.registerPlate({
   accent: "#ffd8b0",
   tex: "D_k=2(i-t)+k(\\pi-2t),\\qquad \\sin i=b=n(\\lambda)\\,\\sin t",
   plain: "Dₖ = 2(i−t) + k(π−2t),   sin i = b = n(λ)·sin t",
-  caption: "Sunlight strikes a spherical raindrop: every ray refracts in, bounces k times, refracts out, and lands at its deviation angle — nothing else is computed. Where dD/db = 0 the exits stall and rays pile up; since brightness is ray density, the bow ignites on its own at 42 degrees from the antisolar point, red outside, with a colour-reversed secondary near 51 degrees (ORDERS counts the bounces) and Alexander's dark band between, where no one- or two-bounce ray can go. FRESNEL charges each interface its honest energy toll, so the secondary is fainter. MODE opens the droplet. Descartes ran this argument in 1637; only the supernumerary arcs, creatures of wave optics, escape the counting.",
+  caption: "Sunlight strikes a spherical raindrop: every ray refracts in, bounces k times, refracts out, and lands at its deviation angle. Nothing else is computed. Where dD/db = 0 the exits stall and rays pile up; since brightness is ray density, the bow ignites on its own at 42 degrees from the antisolar point, red outside, with a colour-reversed secondary near 51 degrees (ORDERS counts the bounces) and Alexander's dark band between, where no one- or two-bounce ray can go. FRESNEL charges each interface its honest energy toll, so the secondary is fainter. MODE opens the droplet. Descartes ran this argument in 1637; only the supernumerary arcs, creatures of wave optics, escape the counting.",
   cam: { dist: 2.6, pitch: 0.1, tgtY: 0.0, rot: 0.03 },
   gain: 1.0,
   params: [
@@ -3056,7 +3056,7 @@ Atlas.registerPlate({
   accent: "#a8d8ff",
   tex: "\\psi(\\mathbf{x})=\\sum_{j=1}^{M}\\cos\\!\\bigl(k\\,\\mathbf{n}_j\\!\\cdot\\mathbf{x}+\\varphi_j\\bigr),\\qquad \\psi=0",
   plain: "ψ(x) = Σⱼ cos(k nⱼ·x + φⱼ),   ψ = 0",
-  caption: "Berry's random-wave model (1977): a high-energy eigenfunction of a classically chaotic cavity should look, statistically, like an isotropic superposition of plane waves sharing a single wavenumber. WAVES M cosines, their directions and phases dealt out by WAVE SEED, are summed, and each point is Newton-projected onto the silent set ψ = 0, so the cloud condenses into a Monte-Carlo portrait of the nodal set — lines in the disk, surfaces in the ball, as DIMENSION selects. It is the wild counterpart of Plate VIII's tidy separable figures. WAVENUMBER k fixes the wavelength, SLAB CUT shears the ball open, and drifting phases keep the foam seething.",
+  caption: "Berry's random-wave model (1977): a high-energy eigenfunction of a classically chaotic cavity should look, statistically, like an isotropic superposition of plane waves sharing a single wavenumber. WAVES M cosines, their directions and phases dealt out by WAVE SEED, are summed, and each point is Newton-projected onto the silent set ψ = 0, so the cloud condenses into a Monte-Carlo portrait of the nodal set: lines in the disk, surfaces in the ball, as DIMENSION selects. It is the wild counterpart of Plate VIII's tidy separable figures. WAVENUMBER k fixes the wavelength, SLAB CUT shears the ball open, and drifting phases keep the foam seething.",
   cam: { dist: 3.2, pitch: 0.3, tgtY: 0.0, rot: 0.05 },
   gain: 0.9,
   params: [
@@ -3161,7 +3161,7 @@ Atlas.registerPlate({
   accent: "#d8c8a8",
   tex: "W(x)=\\sum_{n=0}^{N}a^{n}\\cos(b^{n}\\pi x)\\quad T(x)=\\sum 2^{-n}\\,\\mathrm{dist}(2^{n}x,\\mathbb{Z})\\quad R(x)=\\sum\\frac{\\sin(\\pi n^{2}x)}{\\pi n^{2}}",
   plain: "W = Σ aⁿ cos(bⁿπx),  T = Σ 2⁻ⁿ dist(2ⁿx, ℤ),  R = Σ sin(πn²x)/πn²",
-  caption: "In 1872 Weierstrass presented the Berlin Academy with a function continuous everywhere yet differentiable nowhere. Depth is truncation N: the back wall is one cosine; each slice forward adds a term, and roughness arrives scale by scale until the front face is the monster itself. Brightness is the graph's occupation measure — steep strokes spread their points thin and burn faintest. Colour tracks the newest term, the latest wrinkle aglow. Once ab > 1 the graph has box dimension 2 + log a/log b, steered by AMPLITUDE and FREQ; FUNCTION swaps in Takagi's blancmange (1901) or Riemann's sum sin(πn²x)/πn², differentiable, Gerver proved, exactly at rationals with odd numerator and denominator; ZOOM descends into self-affine detail.",
+  caption: "In 1872 Weierstrass presented the Berlin Academy with a function continuous everywhere yet differentiable nowhere. Depth is truncation N: the back wall is one cosine; each slice forward adds a term, and roughness arrives scale by scale until the front face is the monster itself. Brightness is the graph's occupation measure: steep strokes spread their points thin and burn faintest. Colour tracks the newest term, the latest wrinkle aglow. Once ab > 1 the graph has box dimension 2 + log a/log b, steered by AMPLITUDE and FREQ; FUNCTION swaps in Takagi's blancmange (1901) or Riemann's sum sin(πn²x)/πn², differentiable, Gerver proved, exactly at rationals with odd numerator and denominator; ZOOM descends into self-affine detail.",
   cam: { dist: 3.4, pitch: 0.35, tgtY: 0.0, rot: 0.03 },
   gain: 0.95,
   params: [
@@ -3238,7 +3238,7 @@ Atlas.registerPlate({
   accent: "#98e8b8",
   tex: "S_N(x)=\\sum_{n=1}^{N}e^{\\,i\\pi x n^{2}},\\qquad\\Bigl|\\sum_{n=1}^{q}e^{2\\pi i\\,p n^{2}/q}\\Bigr|=\\sqrt{q}\\quad(\\gcd(p,q)=1,\\ q\\ \\text{odd})",
   plain: "S_N(x) = Σ e^{iπxn²};   |Σ_{n=1..q} e^{2πipn²/q}| = √q  (gcd(p,q)=1, q odd)",
-  caption: "The running sum of e^{iπXn²} walks the plane in unit steps. Its turning rate drifts slowly, so stretches of the walk shadow the Cornu spiral of Fresnel diffraction — these are the curlicues, and Berry and Goldberg showed their spirals-within-spirals hierarchy is orchestrated by the continued fraction of X. At rational X = p/q the terms repeat and the walk becomes one motif stamped over and over; for p/q in lowest terms Gauss computed the complete sum exactly — magnitude √q for odd q. Every step has unit length, so brightness measures time spent: how often the sum revisits a neighbourhood. KIND selects linear, quadratic, or cubic Weyl phases — PHASE adds a linear term to the quadratic — the sums behind Plate XI's Riemann–Siegel formula.",
+  caption: "The running sum of e^{iπXn²} walks the plane in unit steps. Its turning rate drifts slowly, so stretches of the walk shadow the Cornu spiral of Fresnel diffraction. These are the curlicues, and Berry and Goldberg showed their spirals-within-spirals hierarchy is orchestrated by the continued fraction of X. At rational X = p/q the terms repeat and the walk becomes one motif stamped over and over; for p/q in lowest terms Gauss computed the complete sum exactly: magnitude √q for odd q. Every step has unit length, so brightness measures time spent: how often the sum revisits a neighbourhood. KIND selects linear, quadratic, or cubic Weyl phases, and PHASE adds a linear term to the quadratic: the sums behind Plate XI's Riemann–Siegel formula.",
   cam: { dist: 3.0, pitch: 0.9, tgtY: 0.15, rot: 0.02 },
   gain: 0.9,
   params: [
@@ -3332,7 +3332,7 @@ Atlas.registerPlate({
   roman: "XLIII",
   accent: "#f0e090",
   tex: "C\\!\\left(\\tfrac{p}{q}\\right):\\ \\text{radius }\\tfrac{1}{2q^{2}},\\qquad C\\!\\left(\\tfrac{p}{q}\\right)\\ \\text{tangent to}\\ C\\!\\left(\\tfrac{r}{s}\\right)\\iff|ps-qr|=1",
-  plain: "C(p/q): radius 1/(2q²) — tangent to C(r/s) ⇔ |ps−qr| = 1",
+  plain: "C(p/q): radius 1/(2q²) · tangent to C(r/s) ⇔ |ps−qr| = 1",
   caption: "Above every reduced fraction p/q hangs a circle of radius 1/(2q²), tangent to the number line at p/q. No two circles overlap; two are tangent exactly when |ps − qr| = 1, precisely when the fractions are Farey neighbours, and between any tangent pair the mediant (p+r)/(q+s) hangs a circle kissing both, forever. Brightness is a counting measure on the rationals: at WEIGHT zero every fraction with denominator up to Q MAX carries equal light, so a region glows in proportion to how many rationals it holds. MODE launches a flight down the Stern–Brocot tree, which lists every positive rational exactly once; TREE DEPTH prolongs the dive toward the line these horocycles all touch.",
   cam: { dist: 2.9, pitch: 0.2, tgtY: 0.25, rot: 0.03 },
   gain: 0.8,
@@ -3438,7 +3438,7 @@ Atlas.registerPlate({
   accent: "#d4b8ff",
   tex: "\\Phi(E_8)=\\{\\pm e_i\\pm e_j\\}_{i<j}\\;\\cup\\;\\bigl\\{\\tfrac{1}{2}(\\pm1,\\dots,\\pm1)\\bigr\\}_{\\#(-)\\ \\text{even}},\\qquad|\\Phi|=240,\\quad h=30",
   plain: "Φ(E₈) = {±eᵢ±eⱼ, i<j} ∪ {½(±1,…,±1), # of − even};  |Φ| = 240,  h = 30",
-  caption: "The 240 roots of E8 — 112 integer, 128 half-integer, all the same length — decoded one per point and flattened onto the Coxeter plane, where they fall into eight concentric rings of thirty: the figure Peter McMullen drew by hand and John Stembridge computed in 2007. The same vectors are how spheres touch in the densest packing in eight dimensions. MODE 1 traces the 6720 edges joining each root to its 56 nearest neighbours; every root receives equal samples, so the bright heart of the figure is purely projected edges crowding. Depth comes from a second eigenplane, swung by 4D TURN: the object never moves; our shadow of it does.",
+  caption: "The 240 roots of E8, 112 integer and 128 half-integer and all the same length, decoded one per point and flattened onto the Coxeter plane, where they fall into eight concentric rings of thirty: the figure Peter McMullen drew by hand and John Stembridge computed in 2007. The same vectors are how spheres touch in the densest packing in eight dimensions. MODE 1 traces the 6720 edges joining each root to its 56 nearest neighbours; every root receives equal samples, so the bright heart of the figure is purely projected edges crowding. Depth comes from a second eigenplane, swung by 4D TURN: the object never moves; our shadow of it does.",
   cam: { dist: 3.0, pitch: 0.1, tgtY: 0.0, rot: 0.03 },
   gain: 0.8,
   params: [
@@ -3596,7 +3596,7 @@ Atlas.registerPlate({
   accent: "#a0e8e0",
   tex: "y^{2}=x^{3}+ax+b,\\qquad x_{3}=m^{2}-x_{P}-x_{Q},\\qquad \\Delta=-16\\,(4a^{3}+27b^{2})",
   plain: "y² = x³ + ax + b;   x₃ = m² − x_P − x_Q;   Δ = −16(4a³ + 27b²)",
-  caption: "A line through two points of the cubic meets it once more; reflect that third point across the x-axis and you have added the two — an associative group law. A marked point P patrols the curve, a CHORDS fraction of the cloud fans chords from P to random partners, and teal beads mark the sums P + Q back on the curve; brightness estimates how often the chords cross a region. Slide A and B across Δ = −16(4a³ + 27b²) = 0 and the curve pinches singular. MODE 1 reads the same equation modulo primes up to P MAX, one curtain per prime; wherever the curve stays smooth mod p, its count hugs p + 1 within Hasse's 2√p. Wiles reached Fermat through these curves.",
+  caption: "A line through two points of the cubic meets it once more; reflect that third point across the x-axis and you have added the two: an associative group law. A marked point P patrols the curve, a CHORDS fraction of the cloud fans chords from P to random partners, and teal beads mark the sums P + Q back on the curve; brightness estimates how often the chords cross a region. Slide A and B across Δ = −16(4a³ + 27b²) = 0 and the curve pinches singular. MODE 1 reads the same equation modulo primes up to P MAX, one curtain per prime; wherever the curve stays smooth mod p, its count hugs p + 1 within Hasse's 2√p. Wiles reached Fermat through these curves.",
   cam: { dist: 3.2, pitch: 0.25, tgtY: 0.0, rot: 0.04 },
   gain: 0.9,
   params: [
@@ -3789,7 +3789,7 @@ Atlas.registerPlate({
   accent: "#ffb890",
   tex: "H\\colon[0,1]\\twoheadrightarrow[0,1]^{D},\\qquad |H(s)-H(t)|\\le C\\,|s-t|^{1/D}",
   plain: "H: [0,1] ↠ [0,1]^D (onto),   |H(s)−H(t)| ≤ C·|s−t|^(1/D)",
-  caption: "One unbroken thread, never crossing itself, visits every cell — Hilbert's 1891 construction, a year after Peano's: in the limit, a continuous map from segment onto cube, nowhere differentiable, necessarily not one-to-one. Points fall uniformly along the thread: even brightness is the curve spreading the segment's measure evenly through space. Consecutive cells share a face at every ORDER — Hölder locality with the optimal exponent 1/DIMENSION — so hue, the position along the thread, forms coherent patches. Flip MORTON to 1966 bit-interleaving: the same cells in an order teleporting across the cube, shattering the hue — losing the locality spatial indexes prize. Raise ORDER and the thread becomes the cube.",
+  caption: "One unbroken thread, never crossing itself, visits every cell: Hilbert's 1891 construction, a year after Peano's: in the limit, a continuous map from segment onto cube, nowhere differentiable, necessarily not one-to-one. Points fall uniformly along the thread: even brightness is the curve spreading the segment's measure evenly through space. Consecutive cells share a face at every ORDER, Hölder locality with the optimal exponent 1/DIMENSION, so hue, the position along the thread, forms coherent patches. Flip MORTON to 1966 bit-interleaving: the same cells in an order teleporting across the cube, shattering the hue and losing the locality spatial indexes prize. Raise ORDER and the thread becomes the cube.",
   cam: { dist: 3.1, pitch: 0.3, tgtY: 0, rot: 0.05 },
   gain: 0.9,
   params: [
@@ -3879,7 +3879,7 @@ Atlas.registerPlate({
   accent: "#90b8f0",
   tex: "\\{p,q\\}:\\;(p\\!-\\!2)(q\\!-\\!2)>4,\\qquad z\\mapsto\\bar z,\\quad e^{2\\pi i/p}\\,\\bar z,\\quad c+\\dfrac{r^{2}(z-c)}{|z-c|^{2}}",
   plain: "{p,q}: (p−2)(q−2) > 4;   mirrors z ↦ z̄,  e^(2πi/p)·z̄,  c + r²(z−c)/|z−c|²",
-  caption: "The plane of Bolyai and Lobachevsky, tiled by regular P-gons meeting Q to a vertex — hyperbolic exactly when (p−2)(q−2) > 4. Each point is born on one edge of the fundamental polygon and pushed through a random word of the three generating mirrors, WORD LENGTH reflections deep; COLOR tints the generations into rings. The crowding at the rim is not perspective: the disk keeps angles true but compresses area, and hyperbolic circles grow exponentially with radius, so congruent tiles must pile against the boundary — the brightness gradient is the metric itself, the crowding Escher drew in Circle Limit from Coxeter's figure. MODEL lifts the disk onto the hyperboloid model.",
+  caption: "The plane of Bolyai and Lobachevsky, tiled by regular P-gons meeting Q to a vertex, hyperbolic exactly when (p−2)(q−2) > 4. Each point is born on one edge of the fundamental polygon and pushed through a random word of the three generating mirrors, WORD LENGTH reflections deep; COLOR tints the generations into rings. The crowding at the rim is not perspective: the disk keeps angles true but compresses area, and hyperbolic circles grow exponentially with radius, so congruent tiles must pile against the boundary. The brightness gradient is the metric itself, the crowding Escher drew in Circle Limit from Coxeter's figure. MODEL lifts the disk onto the hyperboloid model.",
   cam: { dist: 2.9, pitch: 0.55, tgtY: 0.0, rot: 0.03 },
   gain: 0.85,
   params: [
@@ -3983,7 +3983,7 @@ Atlas.registerPlate({
   accent: "#f09890",
   tex: "V=x^{4}+ax^{2}+bx,\\;\\{V'=0\\};\\qquad b=-4x^{3}-2ax,\\;\\;c=3x^{4}+ax^{2}",
   plain: "V = x⁴+ax²+bx, {V′=0};   b = −4x³−2ax,  c = 3x⁴+ax²",
-  caption: "Thom's list: with at most four control parameters, a smooth potential admits exactly seven elementary catastrophes. FORM shows three. The cusp is the pleated equilibrium sheet of x⁴+ax²+bx — crossing the pleat forces the state to jump between folds, and STABILITY TINT dims the unstable sheet that mediates the jump: hysteresis made visible. The swallowtail is the quartic's double-root set; the elliptic umbilic, a three-cusped pillow. Nothing here traces their ridges — the parametrization's Jacobian collapses on them, so uniform sampling piles density onto the singular edges and the skeleton draws itself: brightness is measure. SECTION cuts down to the classic plane figures, among them the curve of Dalí's last painting.",
+  caption: "Thom's list: with at most four control parameters, a smooth potential admits exactly seven elementary catastrophes. FORM shows three. The cusp is the pleated equilibrium sheet of x⁴+ax²+bx, and crossing the pleat forces the state to jump between folds, and STABILITY TINT dims the unstable sheet that mediates the jump: hysteresis made visible. The swallowtail is the quartic's double-root set; the elliptic umbilic, a three-cusped pillow. Nothing here traces their ridges: the parametrization's Jacobian collapses on them, so uniform sampling piles density onto the singular edges and the skeleton draws itself: brightness is measure. SECTION cuts down to the classic plane figures, among them the curve of Dalí's last painting.",
   cam: { dist: 3.3, pitch: 0.3, tgtY: 0.0, rot: 0.045 },
   gain: 0.9,
   params: [
@@ -4091,7 +4091,7 @@ Atlas.registerPlate({
   accent: "#9fd4ff",
   tex: "I(\\theta)\\propto\\operatorname{sinc}^{2}\\!\\left(\\frac{\\pi a\\sin\\theta}{\\lambda}\\right)\\left[\\frac{\\sin\\!\\left(N\\pi d\\sin\\theta/\\lambda\\right)}{N\\sin\\!\\left(\\pi d\\sin\\theta/\\lambda\\right)}\\right]^{2},\\qquad I_{\\mathrm{Airy}}=\\left[\\frac{2J_{1}(x)}{x}\\right]^{2}",
   plain: "I(θ) ∝ sinc²(πa·sinθ/λ) · [sin(Nπd·sinθ/λ) / (N·sin(πd·sinθ/λ))]²,   Airy: [2J₁(x)/x]²",
-  caption: "Each point is one photon landing on the screen with probability equal to the diffracted intensity, so brightness here is the Born rule: |amplitude|² estimated by counting arrivals — G. I. Taylor's feeble-light exposures of 1909 found the fringes just as sharp when the photons arrived one at a time. APERTURE runs from one slit to two, to a grating of N SLITS, to a round hole of radius SLIT WIDTH whose first dark Airy ring is Rayleigh's sin θ = 1.22 λ/D; those four are Fraunhofer, the far field. The fifth is Fresnel's near field: an opaque disk, with Poisson's absurdity at the centre of its shadow, as bright as the open beam, exactly as Arago found in 1818 — FRESNEL N counts the zones the disk covers. SLIT WIDTH and SPACING are in wavelengths, so WAVELENGTH only recolours; its default 633 nm is the helium-neon line at 632.8. Raise TRAILS and the fringes assemble grain by grain.",
+  caption: "Each point is one photon landing on the screen with probability equal to the diffracted intensity, so brightness here is the Born rule: |amplitude|² estimated by counting arrivals. G. I. Taylor's feeble-light exposures of 1909 found the fringes just as sharp when the photons arrived one at a time. APERTURE runs from one slit to two, to a grating of N SLITS, to a round hole of radius SLIT WIDTH whose first dark Airy ring is Rayleigh's sin θ = 1.22 λ/D; those four are Fraunhofer, the far field. The fifth is Fresnel's near field: an opaque disk, with Poisson's absurdity at the centre of its shadow, as bright as the open beam, exactly as Arago found in 1818. FRESNEL N counts the zones the disk covers. SLIT WIDTH and SPACING are in wavelengths, so WAVELENGTH only recolours; its default 633 nm is the helium-neon line at 632.8. Raise TRAILS and the fringes assemble grain by grain.",
   cam: { dist: 2.5, pitch: 0.12, tgtY: 0.0, rot: 0.04 },
   gain: 0.95,
   params: [
@@ -4346,7 +4346,7 @@ Atlas.registerPlate({
   accent: "#ffc287",
   tex: "I(s)\\propto\\mathrm{Ai}^{2}(s),\\quad \\mathrm{Ai}(x)=c_{1}f(x)-c_{2}g(x);\\qquad P(X,Y)=\\int_{-\\infty}^{\\infty}\\!e^{\\,i\\left(t^{4}+Xt^{2}+Yt\\right)}\\,dt",
   plain: "I(s) ∝ Ai²(s),  Ai(x) = c₁f(x) − c₂g(x);   P(X,Y) = ∫ e^{i(t⁴ + Xt² + Yt)} dt",
-  caption: "Ray optics makes a caustic infinitely bright; the wave field does not. Across a fold the intensity is Airy's function squared: fringes on the lit side, exponential darkness beyond, and the brightest fringe sitting a little inside the geometrical caustic itself, which is drawn here as a dim slate wire. FRINGE SCALE sets how much of the Airy coordinate is packed into that band. The first two forms are the fold and the cusp — A₂ and A₃, the foot of the same ADE ladder Plate XLVIII climbs — given back the wavelength that catastrophe theory throws away: FORM 1 is Pearcey's cusp integral, quadratured per point at QUALITY steps, with the cusp curve threaded through it. FORM 2 dresses Plate XXXIX's rainbow with the function Airy built for it in 1838: DROP SIZE widens the supernumeraries as drops grow finer, though the spacing here is exaggerated and coarse drops smear it away. Brightness is the intensity itself.",
+  caption: "Ray optics makes a caustic infinitely bright; the wave field does not. Across a fold the intensity is Airy's function squared: fringes on the lit side, exponential darkness beyond, and the brightest fringe sitting a little inside the geometrical caustic itself, which is drawn here as a dim slate wire. FRINGE SCALE sets how much of the Airy coordinate is packed into that band. The first two forms are the fold and the cusp, A₂ and A₃, the foot of the same ADE ladder Plate XLVIII climbs, given back the wavelength that catastrophe theory throws away: FORM 1 is Pearcey's cusp integral, quadratured per point at QUALITY steps, with the cusp curve threaded through it. FORM 2 dresses Plate XXXIX's rainbow with the function Airy built for it in 1838: DROP SIZE widens the supernumeraries as drops grow finer, though the spacing here is exaggerated and coarse drops smear it away. Brightness is the intensity itself.",
   cam: { dist: 3.0, pitch: 0.5, tgtY: 0.0, rot: 0.03 },
   gain: 0.95,
   params: [
@@ -4559,7 +4559,7 @@ Atlas.registerPlate({
   accent: "#c9ecf5",
   tex: "D=i_1+i_2-A,\\quad r_1+r_2=A,\\qquad D_{\\min}=2\\arcsin\\!\\left(n\\sin\\tfrac{A}{2}\\right)-A",
   plain: "D = i₁ + i₂ − A,   r₁ + r₂ = A,   D_min = 2·arcsin(n·sin(A/2)) − A",
-  caption: "Sunlight through hexagonal ice, one crystal at a time: refract in at one face, out at another, record where the ray lands on the sky. Nothing draws a ring. Deviation is stationary at its minimum — 21.84 degrees through the 60-degree FACE PAIR at n = 1.31, 45.7 through the 90-degree one — so exits crowd there, and brightness, the density of arrivals, ignites a halo. Nothing can deviate by less than that minimum, so the sky just inside the ring is swept empty — that is the darkening you actually see; total internal reflection closes the far end instead, cutting the outer skirt off near 43.5 degrees. DISPERSION puts red innermost, reversing the rainbow's order. ORIENTATION sets the form: tumbling crystals give circles, plates with small WOBBLE give sundogs at SUN ALT, columns give tangent arcs. GLOW sets the exposure.",
+  caption: "Sunlight through hexagonal ice, one crystal at a time: refract in at one face, out at another, record where the ray lands on the sky. Nothing draws a ring. Deviation is stationary at its minimum: 21.84 degrees through the 60-degree FACE PAIR at n = 1.31, 45.7 through the 90-degree one, so exits crowd there, and brightness, the density of arrivals, ignites a halo. Nothing can deviate by less than that minimum, so the sky just inside the ring is swept empty. That is the darkening you actually see; total internal reflection closes the far end instead, cutting the outer skirt off near 43.5 degrees. DISPERSION puts red innermost, reversing the rainbow's order. ORIENTATION sets the form: tumbling crystals give circles, plates with small WOBBLE give sundogs at SUN ALT, columns give tangent arcs. GLOW sets the exposure.",
   cam: { dist: 2.7, pitch: 0.15, tgtY: 0.2, rot: 0.03 },
   gain: 0.95,
   params: [
@@ -4892,7 +4892,7 @@ Atlas.registerPlate({
   accent: "#b9f2a1",
   tex: "u_{p\\ell}\\propto\\Bigl(\\tfrac{\\sqrt{2}\\,r}{w(z)}\\Bigr)^{|\\ell|}L_p^{|\\ell|}\\!\\Bigl(\\tfrac{2r^2}{w^2}\\Bigr)e^{-r^2/w^2}e^{i\\ell\\varphi},\\qquad \\Phi_G=(2p+|\\ell|+1)\\arctan\\!\\frac{z}{z_R}",
   plain: "u_pℓ ∝ (√2 r/w)^|ℓ| · L_p^|ℓ|(2r²/w²) · e^(−r²/w²) · e^(iℓφ),   Φ_G = (2p+|ℓ|+1)·arctan(z/z_R)",
-  caption: "Allen and co-workers showed in 1992 that a Laguerre-Gaussian beam carries orbital angular momentum ℓℏ per photon, distinct from polarization's spin. The factor e^{iℓφ} winds the wavefront into |ℓ| intertwined helices — ℓ CHARGE sets their number and, by its sign, their handedness — and whenever ℓ ≠ 0 it forces a phase singularity on the axis, where the intensity must vanish: a bright annulus threaded by darkness. Brightness estimates the line integral of |u|², sampled through the envelope WAIST sets; hue reads phase, Gouy shift included, and SPIN turns it. SUPERPOSE adds the mirror mode −ℓ for 2|ℓ| petals, or beats p = 0 against p = 1 along Z RANGE. Two percent of the points are dealt onto the axis and come back nearly empty.",
+  caption: "Allen and co-workers showed in 1992 that a Laguerre-Gaussian beam carries orbital angular momentum ℓℏ per photon, distinct from polarization's spin. The factor e^{iℓφ} winds the wavefront into |ℓ| intertwined helices, where ℓ CHARGE sets their number and, by its sign, their handedness, and whenever ℓ ≠ 0 it forces a phase singularity on the axis, where the intensity must vanish: a bright annulus threaded by darkness. Brightness estimates the line integral of |u|², sampled through the envelope WAIST sets; hue reads phase, Gouy shift included, and SPIN turns it. SUPERPOSE adds the mirror mode −ℓ for 2|ℓ| petals, or beats p = 0 against p = 1 along Z RANGE. Two percent of the points are dealt onto the axis and come back nearly empty.",
   cam: { dist: 3.1, pitch: 0.25, tgtY: 0.0, rot: 0.05 },
   gain: 0.9,
   params: [
@@ -5017,7 +5017,7 @@ Atlas.registerPlate({
   accent: "#f5d9a0",
   tex: "n(y)\\cos\\alpha = C,\\qquad n_{\\text{fish}}=\\frac{n_{0}}{1+r^{2}/a^{2}},\\qquad n_{\\text{Lun}}=\\sqrt{2-r^{2}/a^{2}}",
   plain: "n(y)·cos α = C     n = n₀/(1 + r²/a²)     n = √(2 − r²/a²)",
-  caption: "Stratified air conserves n(y)·cos α along a ray — Snell's law, continuous — so light bends toward higher index. Hot ground has the lowest index: a downgoing ray turns and climbs, and the fold where rays cross is the inverted image. The water on a hot road is the sky. Real contrasts near 10⁻⁴ are invisible: EXAGGERATE inflates them, and the vertical is stretched. LAYER HEIGHT, OBJECT HEIGHT and FAN set the pencil. MODE ducts rays inside an inversion layer — the Fata Morgana stack — or gives two exact lenses: Maxwell's 1854 fisheye, every ray a circle and every point imaged perfectly onto its conjugate, and Luneburg's 1944 √(2−r²/a²), focusing any parallel bundle on the opposite rim and flown as a radar reflector still. Brightness is ray density; the caustics ignite unaided.",
+  caption: "Stratified air conserves n(y)·cos α along a ray, which is Snell's law made continuous, so light bends toward higher index. Hot ground has the lowest index: a downgoing ray turns and climbs, and the fold where rays cross is the inverted image. The water on a hot road is the sky. Real contrasts near 10⁻⁴ are invisible: EXAGGERATE inflates them, and the vertical is stretched. LAYER HEIGHT, OBJECT HEIGHT and FAN set the pencil. MODE ducts rays inside an inversion layer, the Fata Morgana stack, or gives two exact lenses: Maxwell's 1854 fisheye, every ray a circle and every point imaged perfectly onto its conjugate, and Luneburg's 1944 √(2−r²/a²), focusing any parallel bundle on the opposite rim and flown as a radar reflector still. Brightness is ray density; the caustics ignite unaided.",
   cam: { dist: 3.0, pitch: 0.75, tgtY: 0.0, rot: 0.02 },
   gain: 0.9,
   params: [
@@ -5220,7 +5220,7 @@ Atlas.registerPlate({
   accent: "#9effdf",
   tex: "\\mathcal{A}=\\!\\!\\sum_{\\text{paths}}\\!\\! e^{\\,ikL(x)},\\qquad L(x)=|AX|+n\\,|XB|,\\qquad \\frac{dL}{dx}=0",
   plain: "A = Σ_paths e^{ikL(x)},   L(x) = |AX| + n·|XB|,   dL/dx = 0",
-  caption: "Feynman's answer to why light goes straight: it does not — it takes every path, and they conspire. Each point lies on one two-segment route from source to detector via the surface, and the surface is sampled uniformly, so brightness here is nothing but path-sampling density. The physics is the hue: optical phase k(|AX| + n|XB|), wrapped to turns and scaled by PHASE ZOOM. Where that phase is stationary — Fermat's condition, dL/dx = 0 — a whole neighbourhood of paths shares one colour and adds; elsewhere the hue races and the paths cancel. Only the SPIRAL inset adds the phasors for real, coiling tight wherever they cancel and running straight where they do not. MODE gives Hero's equal angles, Snell's N RATIO, and — with paths deleted by STRIP PERIOD and DUTY — a grating, where censoring the cancelling paths lights fresh calm bands away from the specular one: the diffraction orders.",
+  caption: "Feynman's answer to why light goes straight: it does not. It takes every path, and they conspire. Each point lies on one two-segment route from source to detector via the surface, and the surface is sampled uniformly, so brightness here is nothing but path-sampling density. The physics is the hue: optical phase k(|AX| + n|XB|), wrapped to turns and scaled by PHASE ZOOM. Where that phase is stationary, at Fermat's condition dL/dx = 0, a whole neighbourhood of paths shares one colour and adds; elsewhere the hue races and the paths cancel. Only the SPIRAL inset adds the phasors for real, coiling tight wherever they cancel and running straight where they do not. MODE gives Hero's equal angles, Snell's N RATIO, and, with paths deleted by STRIP PERIOD and DUTY, a grating, where censoring the cancelling paths lights fresh calm bands away from the specular one: the diffraction orders.",
   cam: { dist: 2.9, pitch: 0.85, tgtY: 0.0, rot: 0.02 },
   gain: 0.9,
   params: [
@@ -5373,7 +5373,7 @@ Atlas.registerPlate({
   accent: "#8fa8ff",
   tex: "\\cos\\theta' = \\dfrac{\\cos\\theta+\\beta}{1+\\beta\\cos\\theta},\\qquad \\delta=\\gamma\\,(1+\\beta\\cos\\theta),\\qquad T'=\\delta\\,T,\\qquad I_{\\mathrm{bol}}\\propto\\delta^{4}",
   plain: "cos θ′ = (cos θ + β)/(1 + β cos θ),   δ = γ(1 + β cos θ),   T′ = δT,   I_bol ∝ δ⁴",
-  caption: "Fly at SPEED = β and the sky folds forward: aberration, cos θ′ = (cos θ + β)/(1 + β cos θ), pulls half the celestial sphere into a cone of half-angle arccos β — 26 degrees at β = 0.9. GRID sends the rest-frame graticule through the same map, so the crowding becomes geometry. Each star is a blackbody, Doppler-shifted to δT with δ = γ(1 + β cos θ) and beamed, its bolometric intensity going as δ⁴ — which the accumulated brightness estimates, held by a soft knee. TEMP BIAS favours cool dwarfs; CMB adds the 2.725 K shell, the dipole your speedometer cannot hide.",
+  caption: "Fly at SPEED = β and the sky folds forward: aberration, cos θ′ = (cos θ + β)/(1 + β cos θ), pulls half the celestial sphere into a cone of half-angle arccos β, 26 degrees at β = 0.9. GRID sends the rest-frame graticule through the same map, so the crowding becomes geometry. Each star is a blackbody, Doppler-shifted to δT with δ = γ(1 + β cos θ) and beamed, its bolometric intensity going as δ⁴, which the accumulated brightness estimates, held by a soft knee. TEMP BIAS favours cool dwarfs; CMB adds the 2.725 K shell, the dipole your speedometer cannot hide.",
   cam: { dist: 0.5, pitch: 0.05, tgtY: 0.0, rot: 0.02 },
   gain: 0.95,
   params: [
