@@ -16,7 +16,8 @@ Atlas.registerPlate({
     { label: "CONTRACTION",  min: 0.55, max: 0.86,step: 0.005, def: 0.70 },
     { label: "WANDER",       min: 0,    max: 1,   step: 0.01,  def: 0.4  },
     { label: "TIP GLOW",     min: 0,    max: 1,   step: 0.01,  def: 0.6  },
-    { label: "SPAN",         min: 1.2,  max: 3.2, step: 0.05,  def: 2.6  }
+    { label: "SPAN",         min: 1.2,  max: 3.2, step: 0.05,  def: 2.6  },
+    { label: "KEEL",         min: 0,    max: 1,   step: 0.01,  def: 0    }
   ],
   glsl: `
 vec3 shape_breakdown(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
@@ -55,6 +56,12 @@ vec3 shape_breakdown(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
     pos += dir * segLen;
   }
 
+  // KEEL: the trunk's wander is the figure's character and also its
+  // vertical drift - a strip one supertile tall cannot hold both. The
+  // keel subtracts the walk's own accumulated y, each branch subtree
+  // translating rigidly with its attachment, so the channel lies in
+  // the strip's band at any scale while every local wiggle survives.
+  float yBase = pos.y;
   float len   = segLen;
   float width = 0.012;
   uint  addr  = hashu(taddr ^ 305419896u);
@@ -92,6 +99,9 @@ vec3 shape_breakdown(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
   float bank = sign(u) * pow(abs(u), 0.30) * 0.5;
   float core = (rnd.w - 0.5) * 0.35;
   seat += vec2(-dir.y, dir.x) * (bank + core) * wLocal;
+  float yRef = (lived == 0) ? (pos.y - dir.y * len * (1.0 - t))
+                            : yBase;
+  seat.y -= P[7] * yRef;
   float z = (rnd.y - 0.5) * wLocal * 2.0;
   // the channel is not uniform: hashed micro-texture along its run
   float tex = 0.7 + 0.6 * u2f(hashu(addr ^ uint(t * 97.0)));
