@@ -47,6 +47,14 @@ SHELL = """<!DOCTYPE html>
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{desc}">
 <meta name="twitter:image" content="{card}">
+<link rel="canonical" href="{url}">
+<script type="application/ld+json">
+{{"@context": "https://schema.org", "@type": "WebSite",
+ "name": "Pretty Cloud",
+ "alternateName": "The Atlas of Mathematical Forms",
+ "url": "https://prettycloud.io/",
+ "description": "Photographs of mathematical objects, found rather than made, through real traced glass. The browser atlas of the platonography practice."}}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400&family=Ubuntu+Mono&display=swap" rel="stylesheet">
@@ -66,7 +74,8 @@ made by a camera that has never been built, through glass that mostly no
 longer exists. The instrument is specified, and what it does not do is
 written down beside what it does.</p>
 <p class="mono">Logan White · <a href="mailto:logan@improperaperture.com">logan@improperaperture.com</a>
-· <a href="https://github.com/loganw234/PrettyCloud">source</a></p>
+· <a href="https://github.com/loganw234/PrettyCloud">source</a>
+· <a href="https://platonography.com/">the public works</a></p>
 </footer>
 </body>
 </html>
@@ -107,7 +116,7 @@ PAGES = {}
 PAGES["index.html"] = dict(
     title="Pretty Cloud: photographs of things that have never existed",
     desc="A film camera for things that have never existed, with real "
-         "glass in front of it. Fifty-six mathematical objects, "
+         "glass in front of it. Sixty-two mathematical objects, "
          "photographed through a thousand lenses traced from their patents.",
     body="""
 <h1>Photographs of things<br>that have never existed</h1>
@@ -131,7 +140,7 @@ with real glass in front of it.</p>
 </figure>
 
 <div class="prose">
-<p>The subjects are mathematical objects: fifty-six of them, each a few
+<p>The subjects are mathematical objects: sixty-two of them, each a few
 lines of arithmetic rather than a model on a disk. The camera is a
 four-by-five sheet that exists only as a program: the focal length falls
 out of a declared field of view, the aperture is a real entrance pupil
@@ -153,10 +162,19 @@ a different property and a more useful one.</p>
 <div class="cols">
   <div>
     <p class="label">Play</p>
-    <p>The atlas runs in a browser. Fifty-six objects, drawn a million
+    <p>The atlas runs in a browser. Sixty-two objects, drawn a million
     points at a time, with the levers exposed, which is how anybody,
     including me, finds out what they do.</p>
     <p><a class="go" href="/atlas/">Open the atlas</a></p>
+  </div>
+  <div>
+    <p class="label">Give</p>
+    <p>The large-format practice has a name, platonography, and its
+    biggest photographs are public works: gigapixel frames computed by
+    whoever shows up, verified by one another, painting themselves onto
+    a public page as they land.</p>
+    <p><a class="go quiet" href="https://platonography.com/">The public
+    works</a></p>
   </div>
   <div>
     <p class="label">Read</p>
@@ -341,6 +359,15 @@ the material does, to check the thing you made against a number rather
 than against your own opinion of it, and to be honest about the
 tolerance you actually held. That is the entire method here, applied to
 a different material.</p>
+
+<h2>The practice has a name</h2>
+<p>Photography whose subjects are mathematical objects, found rather
+than made, is <b>platonography</b>, and the instrument that practices it
+at large format is the Eidograph. Its biggest photographs are too large
+for one person to back, so they are computed as public works: anyone
+with a graphics card can render a piece, donors verify one another, and
+the picture paints itself onto a public page as it arrives. The works
+live at <a href="https://platonography.com/">platonography.com</a>.</p>
 """)
 
 
@@ -349,7 +376,20 @@ def main():
         (HERE / slug).write_text(
             page(slug, p["title"], p["desc"], p["body"]), encoding="utf-8")
         print(f"  {slug:14s} {len(p['body']):6d} chars  {p['title'][:44]}")
-    print(f"\nwrote {len(PAGES)} pages into {HERE}")
+    # the crawler's furniture, generated with the pages so the two
+    # can never disagree about what exists
+    urls = [f"{SITE}/"] + [f"{SITE}/{s}" for s in PAGES
+                           if s != "index.html"] + [f"{SITE}/atlas/"]
+    (HERE / "sitemap.xml").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "".join(f" <url><loc>{u}</loc></url>\n" for u in urls)
+        + "</urlset>\n", encoding="utf-8")
+    (HERE / "robots.txt").write_text(
+        "User-agent: *\nAllow: /\n\n"
+        f"Sitemap: {SITE}/sitemap.xml\n", encoding="utf-8")
+    print(f"\nwrote {len(PAGES)} pages, sitemap.xml and robots.txt "
+          f"into {HERE}")
 
 
 if __name__ == "__main__":

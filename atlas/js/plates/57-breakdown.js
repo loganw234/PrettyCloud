@@ -51,7 +51,10 @@ vec3 shape_breakdown(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
     taddr = hashu(taddr ^ (uint(i) * 2654435761u));
     float w = (u2f(taddr) - 0.5) * 1.6 * P[4];
     float c = cos(w * 0.35), s = sin(w * 0.35);
-    dir = normalize(vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c));
+    // a rotation of a unit vector is unit: only the mean-reversion
+    // mix needs renormalizing (the first taste of this plate cost
+    // 21.6 ms/pass against the bulb's 2 - the census's first find)
+    dir = vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c);
     dir = normalize(mix(dir, vec2(1.0, 0.0), 0.22));   // the field wins
     pos += dir * segLen;
   }
@@ -79,7 +82,9 @@ vec3 shape_breakdown(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
     float jitter = (u2f(hashu(addr)) - 0.5) * 0.7;
     float a = side * angRad * (1.0 + jitter);
     float c = cos(a), s = sin(a);
-    dir = normalize(vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c));
+    // pure rotation, unit in, unit out: drift over 22 levels is
+    // ~1e-6, far under a filament's own width
+    dir = vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c);
     len   *= contr;
     width *= 0.62;
     pos   += dir * len;
