@@ -116,7 +116,7 @@ PAGES = {}
 PAGES["index.html"] = dict(
     title="Pretty Cloud: photographs of things that have never existed",
     desc="A film camera for things that have never existed, with real "
-         "glass in front of it. Sixty-two mathematical objects, "
+         "glass in front of it. Sixty-three mathematical objects, "
          "photographed through a thousand lenses traced from their patents.",
     body="""
 <h1>Photographs of things<br>that have never existed</h1>
@@ -140,7 +140,7 @@ with real glass in front of it.</p>
 </figure>
 
 <div class="prose">
-<p>The subjects are mathematical objects: sixty-two of them, each a few
+<p>The subjects are mathematical objects: sixty-three of them, each a few
 lines of arithmetic rather than a model on a disk. The camera is a
 four-by-five sheet that exists only as a program: the focal length falls
 out of a declared field of view, the aperture is a real entrance pupil
@@ -162,7 +162,7 @@ a different property and a more useful one.</p>
 <div class="cols">
   <div>
     <p class="label">Play</p>
-    <p>The atlas runs in a browser. Sixty-two objects, drawn a million
+    <p>The atlas runs in a browser. Sixty-three objects, drawn a million
     points at a time, with the levers exposed, which is how anybody,
     including me, finds out what they do.</p>
     <p><a class="go" href="/atlas/">Open the atlas</a></p>
