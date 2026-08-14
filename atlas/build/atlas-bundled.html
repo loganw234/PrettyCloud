@@ -5548,6 +5548,1247 @@ vec3 shape_starfield(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
 });
 
 </script>
+<script>
+/* ── js/plates/57-breakdown.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "breakdown",
+  name: "Dielectric Breakdown",
+  roman: "LVII",
+  accent: "#b48cff",
+  tex: "\\nabla^2\\varphi=0,\\qquad p(\\mathbf{x})\\ \\propto\\ |\\nabla\\varphi|^{\\,\\eta}",
+  plain: "∇²φ = 0,   p(x) ∝ |∇φ|^η   (Laplacian growth)",
+  caption: "Insulators do not fail gracefully. When the field across them wins, the discharge grows a tree: charge advances where the potential gradient is steepest, every advance sharpens the gradient at its own tip, and the runaway writes a branching figure whose trunk carries limbs, whose limbs carry twigs, and whose twigs carry hair too fine to see - the same law at every size, until the medium itself runs out of smallness. Lichtenberg burned them into resin in 1777; this one grows across the plate with its branches drawn from the breakdown hierarchy, each level thinner by the contraction the physics demands. The first of the Mk2 series: plates with no native scale, made for frames that keep magnifying after every other subject has gone soft.",
+  cam: { dist: 3.0, pitch: 0.16, tgtY: 0.0, rot: 0.0 },
+  gain: 0.55,
+  params: [
+    { label: "DEPTH",        min: 4,    max: 22,  step: 1,     def: 16   },
+    { label: "BRANCH PROB",  min: 0.35, max: 0.95,step: 0.01,  def: 0.72 },
+    { label: "BRANCH ANGLE", min: 12,   max: 80,  step: 1,     def: 38   },
+    { label: "CONTRACTION",  min: 0.55, max: 0.86,step: 0.005, def: 0.70 },
+    { label: "WANDER",       min: 0,    max: 1,   step: 0.01,  def: 0.4  },
+    { label: "TIP GLOW",     min: 0,    max: 1,   step: 0.01,  def: 0.6  },
+    { label: "SPAN",         min: 1.2,  max: 3.2, step: 0.05,  def: 2.6  },
+    { label: "KEEL",         min: 0,    max: 1,   step: 0.01,  def: 0    }
+  ],
+  glsl: `
+vec3 shape_breakdown(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  // The tree is addressed, never stored: every node's geometry hashes
+  // from its address alone, so all points agree on the figure and the
+  // accumulation is coherent across passes. The point's own stream
+  // only chooses a path down and a seat along its final filament.
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 747796405u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.x));
+
+  float span   = P[6];
+  float contr  = P[3];
+  float angRad = P[2] * 0.0174533;
+  int   maxD   = int(P[0] + 0.5);
+
+  // equal budget per level: the zoom never starves
+  pt = hashu(pt);
+  int d = int(u2f(pt) * float(maxD));
+
+  // trunk: 24 addressed segments marching +x with hashed wander
+  const int NSEG = 24;
+  pt = hashu(pt);
+  int segTarget = int(u2f(pt) * float(NSEG));
+  vec2 pos = vec2(-0.5 * span, 0.0);
+  vec2 dir = vec2(1.0, 0.0);
+  float segLen = span / float(NSEG);
+  uint taddr = 2166136261u;
+  for(int i = 0; i < NSEG; i++){
+    if(i >= segTarget) break;
+    taddr = hashu(taddr ^ (uint(i) * 2654435761u));
+    float w = (u2f(taddr) - 0.5) * 1.6 * P[4];
+    float c = cos(w * 0.35), s = sin(w * 0.35);
+    // a rotation of a unit vector is unit: only the mean-reversion
+    // mix needs renormalizing (the first taste of this plate cost
+    // 21.6 ms/pass against the bulb's 2 - the census's first find)
+    dir = vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c);
+    dir = normalize(mix(dir, vec2(1.0, 0.0), 0.22));   // the field wins
+    pos += dir * segLen;
+  }
+
+  // KEEL: the trunk's wander is the figure's character and also its
+  // vertical drift - a strip one supertile tall cannot hold both. The
+  // keel subtracts the walk's own accumulated y, each branch subtree
+  // translating rigidly with its attachment, so the channel lies in
+  // the strip's band at any scale while every local wiggle survives.
+  float yBase = pos.y;
+  float len   = segLen;
+  float width = 0.012;
+  uint  addr  = hashu(taddr ^ 305419896u);
+  int   lived = 0;
+  for(int l = 0; l < 22; l++){
+    if(l >= d) break;
+    // does this node branch at all? physics dial: eta shapes how
+    // greedily the tips hog the growth
+    addr = hashu(addr);
+    if(u2f(addr) > P[1]){ break; }          // starved limb: dies here
+    // the point walks one child; the child's geometry is addressed
+    pt = hashu(pt);
+    float side = (u2f(pt) < 0.5) ? -1.0 : 1.0;
+    addr = hashu(addr ^ ((side < 0.0) ? 1103515245u : 12345u));
+    float jitter = (u2f(hashu(addr)) - 0.5) * 0.7;
+    float a = side * angRad * (1.0 + jitter);
+    float c = cos(a), s = sin(a);
+    // pure rotation, unit in, unit out: drift over 22 levels is
+    // ~1e-6, far under a filament's own width
+    dir = vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c);
+    len   *= contr;
+    width *= 0.62;
+    pos   += dir * len;
+    lived += 1;
+  }
+
+  // seat along the final filament. Current crowds the channel's
+  // surface, so the transverse seat is bank-weighted - twin rails
+  // instead of an airbrushed capsule - and the width tapers toward
+  // the child it feeds, so limbs meet their twigs instead of
+  // fading beside them.
+  pt = hashu(pt);
+  float t = u2f(pt);
+  vec2 seat = pos - dir * len * (1.0 - t);
+  float wLocal = width * mix(1.15, 0.62, t);
+  float u = 2.0 * rnd.z - 1.0;
+  float bank = sign(u) * pow(abs(u), 0.30) * 0.5;
+  float core = (rnd.w - 0.5) * 0.35;
+  seat += vec2(-dir.y, dir.x) * (bank + core) * wLocal;
+  float yRef = (lived == 0) ? (pos.y - dir.y * len * (1.0 - t))
+                            : yBase;
+  seat.y -= P[7] * yRef;
+  float z = (rnd.y - 0.5) * wLocal * 2.0;
+  // the channel is not uniform: hashed micro-texture along its run
+  float tex = 0.7 + 0.6 * u2f(hashu(addr ^ uint(t * 97.0)));
+
+  float lv = float(lived) / max(P[0], 1.0);
+  float hot = 1.0 - lv;
+  col = pal(0.62 + 0.25 * lv,
+            vec3(0.42, 0.36, 0.52), vec3(0.5, 0.45, 0.5),
+            vec3(1.0, 0.85, 0.7), vec3(0.05, 0.2, 0.45))
+        * (0.5 + 1.6 * hot * hot + P[5] * lv * lv * 1.8) * tex;
+  return vec3(seat.x, seat.y * 0.92, z);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/58-critical.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "critical",
+  name: "The Critical Point",
+  roman: "LVIII",
+  accent: "#7ad9c0",
+  tex: "M_{n+1}:\\ \\text{keep each of }b^2\\text{ cells w.p. }p,\\qquad \\dim M_\\infty = 2+\\log_b p",
+  plain: "keep each of b² cells with probability p;  dim M∞ = 2 + log_b p",
+  caption: "Water at the boiling point is neither liquid nor steam; a magnet at the Curie point can no longer decide. At a critical point the correlation length diverges, and structure stops having a size: clusters nest inside clusters at every scale, identically, forever - the only place in physics where infinite detail is a theorem rather than a flourish. This plate grows Mandelbrot's fractal percolation, the cleanest laboratory of that idea: each cell divides and its children survive by the toss of a weighted coin, and the dial that weights the coin walks the plate through its phase transition - dust below, a spanning lace at the threshold, solid above. The second of the Mk2 series, built for the accumulated renders: a subject with more depth than any frame that will ever hold it.",
+  cam: { dist: 3.0, pitch: 0.34, tgtY: 0.0, rot: 0.0 },
+  gain: 0.5,
+  params: [
+    { label: "OCCUPANCY p", min: 0.55, max: 0.98, step: 0.005, def: 0.76 },
+    { label: "SUBDIV b",    min: 2,    max: 4,    step: 1,     def: 3    },
+    { label: "DEPTH",       min: 4,    max: 22,   step: 1,     def: 14   },
+    { label: "CLUSTER TINT",min: 0,    max: 1,    step: 0.01,  def: 0.55 },
+    { label: "SLAB Z",      min: 0,    max: 0.5,  step: 0.01,  def: 0.10 },
+    { label: "HULL BIAS",   min: 0,    max: 1,    step: 0.01,  def: 0.35 }
+  ],
+  glsl: `
+vec3 shape_critical(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  // Fractal percolation, sampled: the retained-cell hierarchy is
+  // addressed by hash, so every point sees the same realization and
+  // the accumulation is one object. Depth is drawn uniformly - equal
+  // sample budget per octave, the Mk2 series' design law.
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 362437u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.w));
+
+  int b    = int(P[1] + 0.5);
+  int maxD = int(P[2] + 0.5);
+  pt = hashu(pt);
+  // biased toward depth: the coarse levels are honest flat washes
+  // over their whole cells, and equal light there fogs the lace -
+  // every level still receives samples, the deep just receives more
+  int d = int(pow(u2f(pt), 0.65) * float(maxD));
+
+  vec2  cell  = vec2(0.0);
+  float scale = 1.0;
+  uint  addr  = 2166136261u;
+  uint  lineage = addr;
+  int   reached = 0;
+  for(int l = 0; l < 22; l++){
+    if(l >= d) break;
+    // the point tries a few children; occupancy is addressed, so a
+    // child is kept or void identically for everyone
+    bool moved = false;
+    for(int k = 0; k < 6; k++){
+      pt = hashu(pt);
+      int cx = int(u2f(pt) * float(b));
+      pt = hashu(pt);
+      int cy = int(u2f(pt) * float(b));
+      uint caddr = hashu(addr ^ uint(cy * 97 + cx + 1));
+      if(u2f(caddr) < P[0]){
+        cell  += (vec2(float(cx), float(cy)) + 0.0) * scale / float(b)
+                 - vec2(scale * 0.5 * (1.0 - 1.0/float(b)));
+        scale /= float(b);
+        addr   = caddr;
+        lineage = hashu(lineage ^ caddr);
+        moved  = true;
+        reached += 1;
+        break;
+      }
+    }
+    if(!moved) break;      // the cluster dies here; deposit on its dust
+  }
+
+  // seat inside the surviving cell; hull bias pushes light toward the
+  // cell's rim, where the cluster boundary lives
+  vec2 j = vec2(rnd.x, rnd.y) - 0.5;
+  float rim = max(abs(j.x), abs(j.y)) * 2.0;
+  if(u2f(hashu(pt ^ 77u)) < P[5] && rim < 0.62){
+    j *= 0.92 / max(rim, 1.0e-3);
+  }
+  vec2 seat = cell + j * scale;
+  // the slab's thickness follows the cell: fine structure lies flat,
+  // so depth parallax cannot smear the lace it took levels to reach
+  float z = ((u2f(hashu(lineage ^ 39916801u)) - 0.5)
+             + (rnd.z - 0.5) * 0.3) * P[4] * (0.25 + 3.0 * scale);
+
+  float lv = float(reached) / max(P[2], 1.0);
+  float tint = u2f(hashu(lineage)) * P[3];
+  col = pal(0.32 + tint * 0.5 + lv * 0.12,
+            vec3(0.45, 0.5, 0.47), vec3(0.42, 0.5, 0.45),
+            vec3(0.9, 1.0, 0.85), vec3(0.15, 0.42, 0.6))
+        * (0.12 + 1.9 * lv * lv);
+  return vec3(seat.x * 1.9, seat.y * 1.9, z);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/59-drainage.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "drainage",
+  name: "The Drainage Basin",
+  roman: "LIX",
+  accent: "#6fb3e0",
+  tex: "L \\sim A^{h},\\quad h\\approx 0.57\\qquad (\\text{Hack's law})",
+  plain: "L ∼ A^h,  h ≈ 0.57   (Hack's law: stream length vs basin area)",
+  caption: "Rain has no plan, and yet every landscape drains through the same architecture: rivulets feed creeks feed rivers, junction by junction, with scaling laws so stable they hold from a hillside gully to the Amazon - stream lengths growing as basin area to Hack's exponent, tributary counts falling in Horton's ratios. This basin grows by those laws, each stream an addressed walk that meanders as it descends, each junction handing its water down an order. The trunk river runs the plate; everything else exists to find it. Third of the Mk2 series: at any magnification there is a smaller tributary still finding its way downhill.",
+  cam: { dist: 3.0, pitch: 0.2, tgtY: 0.0, rot: 0.0 },
+  gain: 0.55,
+  params: [
+    { label: "DEPTH",        min: 4,   max: 22,  step: 1,    def: 15   },
+    { label: "JUNCTION DEG", min: 30,  max: 85,  step: 1,    def: 58   },
+    { label: "LENGTH RATIO", min: 0.4, max: 0.62,step: 0.005,def: 0.52 },
+    { label: "MEANDER",      min: 0,   max: 1,   step: 0.01, def: 0.55 },
+    { label: "RELIEF",       min: 0,   max: 0.4, step: 0.005,def: 0.12 },
+    { label: "SPAN",         min: 1.2, max: 3.2, step: 0.05, def: 2.8  },
+    { label: "FLOW GLOW",    min: 0,   max: 1,   step: 0.01, def: 0.5  },
+    { label: "KEEL",         min: 0,   max: 1,   step: 0.01, def: 0    }
+  ],
+  glsl: `
+vec3 shape_drainage(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  // The basin is addressed like the breakdown's tree: every stream's
+  // geometry hashes from its address, every point walks one tributary
+  // path, and depth is drawn uniformly so each order of stream gets
+  // the same sample budget - a gully resolves like the river does.
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 668265263u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.x));
+
+  float span   = P[5];
+  float lratio = P[2];
+  float angRad = P[1] * 0.0174533;
+  int   maxD   = int(P[0] + 0.5);
+  pt = hashu(pt);
+  int d = int(u2f(pt) * float(maxD));
+
+  // the trunk river: 24 addressed reaches meandering seaward
+  const int NSEG = 24;
+  pt = hashu(pt);
+  int segTarget = int(u2f(pt) * float(NSEG));
+  vec2 pos = vec2(-0.5 * span, 0.0);
+  vec2 dir = vec2(1.0, 0.0);
+  float segLen = span / float(NSEG);
+  uint taddr = 2166136261u;
+  for(int i = 0; i < NSEG; i++){
+    if(i >= segTarget) break;
+    taddr = hashu(taddr ^ (uint(i) * 2654435761u));
+    float w = (u2f(taddr) - 0.5) * 2.2 * P[3];
+    float c = cos(w * 0.30), s = sin(w * 0.30);
+    dir = vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c);
+    dir = normalize(mix(dir, vec2(1.0, 0.0), 0.30));
+    pos += dir * segLen;
+  }
+  float yBase = pos.y;
+
+  // tributaries climb the orders: each level a smaller stream
+  // joining steeply, meandering more (small streams wander; big
+  // rivers are kept straight by their own discharge)
+  float len   = segLen * 0.9;
+  float width = 0.010;
+  uint  addr  = hashu(taddr ^ 19349663u);
+  int   lived = 0;
+  for(int l = 0; l < 22; l++){
+    if(l >= d) break;
+    pt = hashu(pt);
+    float side = (u2f(pt) < 0.5) ? -1.0 : 1.0;
+    addr = hashu(addr ^ ((side < 0.0) ? 83492791u : 297121507u));
+    float jitter = (u2f(addr) - 0.5) * 0.55;
+    float a = side * angRad * (1.0 + jitter);
+    float c = cos(a), s = sin(a);
+    dir = vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c);
+    // upstream meander grows as the stream shrinks
+    uint ma = hashu(addr ^ 4256249u);
+    float mw = (u2f(ma) - 0.5) * P[3] * (0.4 + 0.08 * float(l));
+    float mc = cos(mw), ms = sin(mw);
+    dir = vec2(dir.x * mc - dir.y * ms, dir.x * ms + dir.y * mc);
+    len   *= lratio + 0.5 * (1.0 - lratio) * u2f(hashu(ma));
+    width *= 0.60;
+    pos   += dir * len;
+    lived += 1;
+  }
+
+  pt = hashu(pt);
+  float t = u2f(pt);
+  vec2 seat = pos - dir * len * (1.0 - t);
+  float wLocal = width * mix(1.1, 0.6, t);
+  float u = 2.0 * rnd.z - 1.0;
+  float bank = sign(u) * pow(abs(u), 0.35) * 0.5;
+  seat += vec2(-dir.y, dir.x) * (bank + (rnd.w - 0.5) * 0.3) * wLocal;
+  float yRef = (lived == 0) ? (pos.y - dir.y * len * (1.0 - t))
+                            : yBase;
+  seat.y -= P[7] * yRef;
+  // relief: headwaters sit high, the trunk lies in its valley
+  float lv = float(lived) / max(P[0], 1.0);
+  float z = lv * P[4] + (rnd.y - 0.5) * wLocal * 2.0;
+
+  float order = 1.0 - lv;
+  col = pal(0.55 + 0.18 * lv,
+            vec3(0.40, 0.46, 0.50), vec3(0.45, 0.42, 0.38),
+            vec3(0.9, 0.8, 1.0), vec3(0.52, 0.30, 0.15))
+        * (0.45 + 1.5 * order * order + P[6] * lv * 0.9);
+  return vec3(seat.x, seat.y * 0.92, z);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/60-cascade.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "cascade",
+  name: "The Turbulent Cascade",
+  roman: "LX",
+  accent: "#e0a56f",
+  tex: "E(k)\\ \\propto\\ \\varepsilon^{2/3}\\,k^{-5/3}",
+  plain: "E(k) ∝ ε^⅔ k^(−5/3)   (Kolmogorov 1941)",
+  caption: "Stir a fluid and the energy you put in does not stay at the size you stirred: whirls shed smaller whirls, which shed smaller still, energy cascading down the scales until viscosity finally collects it - and in between, Kolmogorov's five-thirds law holds with an evenness almost nothing in nature matches. This plate is that in-between, made visible: ink advected through a velocity field built octave by octave at the cascade's own amplitudes, every scale carrying its lawful share. There is no largest eddy that matters and no smallest you will reach. Fourth of the Mk2 series, and the one whose subject is the series' own design law: equal structure per octave, by physics rather than by construction.",
+  cam: { dist: 3.0, pitch: 0.3, tgtY: 0.0, rot: 0.0 },
+  gain: 0.5,
+  params: [
+    { label: "OCTAVES",      min: 3,   max: 12,  step: 1,    def: 9    },
+    { label: "SLOPE",        min: 0.2, max: 0.55,step: 0.005,def: 0.333},
+    { label: "STIR",         min: 0.2, max: 2.0, step: 0.01, def: 1.0  },
+    { label: "STREAM STEPS", min: 2,   max: 12,  step: 1,    def: 7    },
+    { label: "INTERMITTENCY",min: 0,   max: 1,   step: 0.01, def: 0.35 },
+    { label: "SLAB Z",       min: 0,   max: 0.4, step: 0.005,def: 0.08 },
+    { label: "INK",          min: 0,   max: 1,   step: 0.01, def: 0.55 }
+  ],
+  glsl: `
+// hashed lattice gradients: value noise cheap enough to stack a
+// dozen octaves per streamline step
+float vnoise_cascade(vec2 p, uint oc){
+  vec2 i = floor(p), f = p - i;
+  vec2 w = f * f * (3.0 - 2.0 * f);
+  uint bx = uint(int(i.x) & 1023), by = uint(int(i.y) & 1023);
+  uint h00 = hashu(oc ^ hashu(bx * 374761393u + by * 668265263u));
+  uint h10 = hashu(oc ^ hashu((bx + 1u) * 374761393u + by * 668265263u));
+  uint h01 = hashu(oc ^ hashu(bx * 374761393u + (by + 1u) * 668265263u));
+  uint h11 = hashu(oc ^ hashu((bx + 1u) * 374761393u + (by + 1u) * 668265263u));
+  float a = mix(u2f(h00), u2f(h10), w.x);
+  float b = mix(u2f(h01), u2f(h11), w.x);
+  return mix(a, b, w.y) - 0.5;
+}
+
+vec3 shape_cascade(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  // A parcel of ink: seeded anywhere, advected a few steps through
+  // the summed cascade, deposited along its path. The octave that
+  // dominates each parcel's look is drawn uniformly, so the record's
+  // zoom always finds an eddy being resolved at its own scale.
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 951274213u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.w));
+
+  int   octs  = int(P[0] + 0.5);
+  float slope = P[1];
+  int   steps = int(P[3] + 0.5);
+
+  // seed position: uniform over the stirred square
+  pt = hashu(pt);
+  vec2 p = vec2(u2f(pt), u2f(hashu(pt))) * 2.4 - 1.2;
+  pt = hashu(hashu(pt));
+
+  // the parcel's focus octave - equal budget per scale
+  pt = hashu(pt);
+  int focus = int(u2f(pt) * float(octs));
+
+  // intermittency: a multiplicative gate per octave, the roughness
+  // real dissipation fields carry beyond K41
+  float gate = 1.0;
+  uint ga = hashu(pt ^ 88888881u);
+  for(int o = 0; o < 12; o++){
+    if(o >= focus) break;
+    ga = hashu(ga);
+    gate *= mix(1.0, 0.35 + 1.3 * u2f(ga), P[4]);
+  }
+
+  float h = 0.0;
+  vec2 trail = p;
+  float dt = 0.16 / float(steps);
+  for(int s = 0; s < 12; s++){
+    if(s >= steps) break;
+    // curl of the summed field: finite-difference on stacked noise,
+    // amplitudes k^-slope per octave, focus octave emphasized
+    vec2 v = vec2(0.0);
+    float freq = 2.0, amp = 1.0;
+    for(int o = 0; o < 12; o++){
+      if(o >= octs) break;
+      float e = 0.02 / freq;
+      uint oc = uint(o * 101 + 17);
+      float n1 = vnoise_cascade((trail + vec2(0.0, e)) * freq, oc);
+      float n2 = vnoise_cascade((trail - vec2(0.0, e)) * freq, oc);
+      float n3 = vnoise_cascade((trail + vec2(e, 0.0)) * freq, oc);
+      float n4 = vnoise_cascade((trail - vec2(e, 0.0)) * freq, oc);
+      float boost = (o == focus) ? 2.2 : 1.0;
+      v += amp * boost * vec2(n1 - n2, n4 - n3) / (2.0 * e);
+      h += amp * boost * (n1 + n2 + n3 + n4) * 0.25;
+      freq *= 2.0;
+      amp  *= pow(0.5, 1.0 - slope) * 0.62;
+    }
+    trail += normalize(v + vec2(1.0e-6)) * dt * P[2] * gate;
+  }
+
+  pt = hashu(pt);
+  float along = u2f(pt);
+  vec2 seat = mix(p, trail, along);
+  float z = (rnd.y - 0.5) * P[5] * (0.4 + 0.6 * gate);
+  float lv = float(focus) / max(float(octs - 1), 1.0);
+  col = pal(0.08 + 0.5 * lv + 0.12 * h,
+            vec3(0.5, 0.42, 0.36), vec3(0.5, 0.4, 0.35),
+            vec3(1.0, 0.85, 0.6), vec3(0.0, 0.2, 0.5))
+        * (0.35 + 1.3 * gate * (0.5 + P[6]));
+  return vec3(seat.x, seat.y, z);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/61-tangle.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "tangle",
+  name: "The Vortex Tangle",
+  roman: "LXI",
+  accent: "#8fe08f",
+  tex: "\\oint \\mathbf{v}\\cdot d\\boldsymbol{\\ell} = \\frac{h}{m}\\,n,\\quad n\\in\\mathbb{Z}",
+  plain: "∮ v · dℓ = (h/m) n,  n ∈ ℤ   (quantized circulation)",
+  caption: "Below two kelvin, helium stops negotiating: circulation comes only in whole units of h over m, so its turbulence is not a smear of eddies but a literal tangle of discrete vortex lines, each a filament thinner than an atom carrying exactly one quantum of swirl. This plate winds that tangle - every filament a closed loop drawn from its own addressed harmonics, crowding and threading its neighbours, the small loops shed by reconnections outnumbering the large by the tangle's own power law. Fifth of the Mk2 series: the only turbulence whose structure is countable, filament by filament, at any depth the frame can hold.",
+  cam: { dist: 3.0, pitch: 0.35, tgtY: 0.0, rot: 0.06 },
+  gain: 0.55,
+  params: [
+    { label: "FILAMENTS",  min: 40,  max: 2000, step: 10,   def: 700  },
+    { label: "SIZE LAW",   min: 0.8, max: 2.6,  step: 0.02, def: 1.7  },
+    { label: "HARMONICS",  min: 2,   max: 6,    step: 1,    def: 4    },
+    { label: "WRITHE",     min: 0,   max: 1,    step: 0.01, def: 0.55 },
+    { label: "TANGLE R",   min: 0.4, max: 1.4,  step: 0.01, def: 0.95 },
+    { label: "CORE GLOW",  min: 0,   max: 1,    step: 0.01, def: 0.6  },
+    { label: "FLATTEN",    min: 0,   max: 1,    step: 0.01, def: 0.25 }
+  ],
+  glsl: `
+vec3 shape_tangle(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  // One point, one filament, one seat along it. Loop sizes follow a
+  // power law drawn per filament, so the zoom's window always holds
+  // loops at its own scale; each loop is a closed Fourier curve
+  // whose coefficients hash from the filament's address alone.
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 522882781u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.x));
+
+  int nf = int(P[0] + 0.5);
+  pt = hashu(pt);
+  int fid = int(u2f(pt) * float(nf));
+  uint fa = hashu(uint(fid) * 2654435761u ^ 40503u);
+
+  // size: power-law between scales, small loops plentiful
+  float su = u2f(fa);
+  float size = 0.02 + 0.9 * pow(su, P[1]);
+
+  // center inside the tangle ball
+  uint ca = hashu(fa ^ 7919u);
+  vec3 ctr = (vec3(u2f(ca), u2f(hashu(ca)), u2f(hashu(hashu(ca))))
+              - 0.5) * 2.0 * P[4];
+  ctr.z *= (1.0 - P[7] * 0.8);
+
+  // the loop: base circle in an addressed plane plus harmonics
+  pt = hashu(pt);
+  float th = TAU * u2f(pt);
+  uint pa = hashu(fa ^ 104729u);
+  float a1 = TAU * u2f(pa), a2 = TAU * u2f(hashu(pa));
+  vec3 e1 = vec3(cos(a1) * cos(a2), sin(a1) * cos(a2), sin(a2));
+  vec3 e2 = normalize(cross(e1, vec3(0.31, 0.71, 0.63)));
+  vec3 e3 = cross(e1, e2);
+  vec3 p3 = ctr + size * (cos(th) * e2 + sin(th) * e3);
+  int nh = int(P[2] + 0.5);
+  uint ha = hashu(fa ^ 15485863u);
+  float amp = size * 0.45 * P[3];
+  for(int k = 2; k < 8; k++){
+    if(k >= nh + 2) break;
+    ha = hashu(ha);
+    float ph = TAU * u2f(ha);
+    ha = hashu(ha);
+    float wk = amp * (u2f(ha) - 0.3) / float(k * k);
+    p3 += wk * (cos(float(k) * th + ph) * e1
+              + sin(float(k) * th + ph) * e2);
+  }
+  p3.z *= (1.0 - P[7] * 0.8);
+
+  // the quantized core: light hugs the line, a breath of halo out
+  float rr = pow(abs(2.0 * rnd.z - 1.0), 2.4) * size * 0.06;
+  uint na = hashu(pt ^ 32452843u);
+  float ra = TAU * u2f(na);
+  p3 += rr * (cos(ra) * e1 + sin(ra) * e2);
+
+  float sz = 1.0 - su;
+  col = pal(0.30 + 0.35 * su,
+            vec3(0.42, 0.5, 0.44), vec3(0.4, 0.5, 0.42),
+            vec3(0.85, 1.0, 0.9), vec3(0.2, 0.45, 0.6))
+        * (0.4 + 1.6 * sz * sz * (0.5 + P[5]));
+  return p3;
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/62-dissipation.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "dissipation",
+  name: "The Dissipation Field",
+  roman: "LXII",
+  accent: "#e08fb8",
+  tex: "\\varepsilon_{n+1} = \\varepsilon_n \\cdot W,\\quad \\langle W\\rangle = 1,\\ \\operatorname{Var}\\log W = \\lambda^2",
+  plain: "ε ← ε · W per octave,  ⟨W⟩ = 1,  Var(log W) = λ²   (multiplicative cascade)",
+  caption: "Where turbulence actually spends its energy is nothing like even: dissipation clots into sheets and strands, calm for miles then violent in a filament - and the classical model of that roughness is the multiplicative cascade, each octave multiplying the last by a random weight of mean one. Repeat, and the field's unevenness compounds without limit: a measure that is almost nowhere large and yet holds almost everything, singular in the limit at every point that matters. This plate runs the cascade down its octaves with the weights' variance on a dial - smooth rain at zero, at full a storm concentrated on threads. Sixth of the Mk2 series, and the living renders' natural companion: its structure is not shapes but statistics, and statistics never run out.",
+  cam: { dist: 3.0, pitch: 0.4, tgtY: 0.0, rot: 0.0 },
+  gain: 0.5,
+  params: [
+    { label: "LAMBDA",     min: 0,   max: 1.2, step: 0.01, def: 0.55 },
+    { label: "SUBDIV b",   min: 2,   max: 4,   step: 1,    def: 2    },
+    { label: "DEPTH",      min: 6,   max: 22,  step: 1,    def: 16   },
+    { label: "STRETCH",    min: 0,   max: 0.8, step: 0.01, def: 0.35 },
+    { label: "SLAB Z",     min: 0,   max: 0.4, step: 0.005,def: 0.06 },
+    { label: "EMBER",      min: 0,   max: 1,   step: 0.01, def: 0.5  }
+  ],
+  glsl: `
+vec3 shape_dissipation(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  // The cascade, walked: descend the b-ary cells multiplying an
+  // addressed lognormal-ish weight per level. Every cell exists -
+  // the measure has full support - but the walked product decides
+  // how brightly this parcel burns, and at depth the bright threads
+  // are vanishingly rare and carry nearly everything. Depth is drawn
+  // uniformly: the statistics are the structure, at every octave.
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 217645177u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.w));
+
+  int b    = int(P[1] + 0.5);
+  int maxD = int(P[2] + 0.5);
+  pt = hashu(pt);
+  int d = int(u2f(pt) * float(maxD));
+
+  vec2  cell  = vec2(0.0);
+  float scale = 1.0;
+  uint  addr  = 2166136261u;
+  float logw  = 0.0;
+  float aniso = 0.0;
+  for(int l = 0; l < 22; l++){
+    if(l >= d) break;
+    pt = hashu(pt);
+    int cx = int(u2f(pt) * float(b));
+    pt = hashu(pt);
+    int cy = int(u2f(pt) * float(b));
+    addr = hashu(addr ^ uint(cy * 89 + cx + 3));
+    // weight: log-symmetric around mean one, variance lambda^2 -
+    // two hashed uniforms make a passable gaussian
+    uint wa = hashu(addr ^ 65537u);
+    float g = (u2f(wa) + u2f(hashu(wa)) - 1.0) * 1.73;
+    logw += P[0] * g - 0.5 * P[0] * P[0];
+    // sheared descent: dissipation sheets stretch along the strain
+    uint sa = hashu(addr ^ 262147u);
+    aniso += (u2f(sa) - 0.5) * P[3];
+    cell  += (vec2(float(cx), float(cy))) * scale / float(b)
+             - vec2(scale * 0.5 * (1.0 - 1.0 / float(b)));
+    scale /= float(b);
+  }
+
+  vec2 j = vec2(rnd.x, rnd.y) - 0.5;
+  j.x += j.y * aniso;                    // the shear, accumulated
+  vec2 seat = cell + j * scale;
+  float w = exp(logw);
+  float z = ((u2f(hashu(addr ^ 39916801u)) - 0.5)
+             + (rnd.z - 0.5) * 0.3) * P[4] * (0.25 + 3.0 * scale);
+
+  float lv = float(d) / max(P[2], 1.0);
+  float heat = clamp(w * 0.35, 0.0, 2.5);
+  col = pal(0.05 + 0.35 * clamp(heat, 0.0, 1.2) + 0.1 * lv,
+            vec3(0.5, 0.4, 0.38), vec3(0.5, 0.42, 0.4),
+            vec3(1.0, 0.8, 0.55), vec3(0.0, 0.15, 0.35))
+        * (0.15 + heat * (0.6 + P[5]));
+  return vec3(seat.x * 1.9, seat.y * 1.9, z);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/63-vlsi.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "vlsi",
+  name: "Very Large Scale Integration",
+  roman: "LXIII",
+  accent: "#f0b448",
+  tex: "R\\to R'\\sqcup R'',\\ \\ \\partial\\in 5760\\,\\mathbb{Z}\\,\\mathrm{nm},\\quad \\tau'=M[\\tau,h(a)],\\quad F\\subset\\mathbb{Z}^2\\,\\mathrm{nm}",
+  plain: "R → R′ ⊔ R″, cuts on 5760·ℤ nm;  τ′ = M[τ, h(addr)];  every feature an integer-nm rectangle",
+  caption: "In 1959 Jean Hoerni flattened the transistor into a drawing and Robert Noyce saw that the drawing could carry its own wiring; ever since, a computer is a photograph, stepped onto silicon as rectangles on an integer grid. This plate draws such a die the Mk2 way, addressed and never stored: a pad ring, a cache, and a floor of logic recursively cut from one 10.32 mm square, every cut, bus, cell, gate and contact hashed from its address on a lattice of whole nanometres, the way a mask database keeps them. It is the first plate whose subject is not mathematics but a made thing - nothing here is a theorem, and the fidelity is to a craft. MAGNIFY rides the same addresses downward, and because the lattice is integer arithmetic the window stays exact where float32 would have dissolved; the recursion bottoms where the process does, at a gate 180 nanometres long. Seventh of the Mk2 series: a portrait of the object every other plate has been running on.",
+  cam: { dist: 3.0, pitch: 0.30, tgtY: 0.0, rot: 0.0 },
+  gain: 0.5,
+  params: [
+    { label: "DEPTH",        min: 2,    max: 16,   step: 1,    def: 16   },
+    { label: "MAGNIFY",      min: 0,    max: 14,   step: 0.25, def: 0    },
+    { label: "MASK SET",     min: 1,    max: 64,   step: 1,    def: 7    },
+    { label: "CACHE",        min: 0.15, max: 0.55, step: 0.01, def: 0.30 },
+    { label: "METAL LAYERS", min: 3,    max: 6,    step: 1,    def: 5    },
+    { label: "UTILIZATION",  min: 0.40, max: 0.98, step: 0.01, def: 0.82 },
+    { label: "STAIN",        min: 0,    max: 1,    step: 0.01, def: 0.35 },
+    { label: "FILL",         min: 0,    max: 1,    step: 0.01, def: 0.55 }
+  ],
+  glsl: `
+// ───── the process: every constant is a whole number of nanometres ────
+// D3D's shader compiler grows superlinearly with flattened program
+// size (measured here: time ~ size^2.6, thirty seconds for the naive
+// writing of this plate against the breakdown's 0.2). So the furniture
+// vocabulary is built like the die is: one track engine, one fill, one
+// ring, one dot, and every branch below only fills in parameters.
+const int VROW  = 5760;      // standard-cell row pitch
+const int VSITE = 720;       // poly gate pitch
+const int VDIE  = 10321920;  // the die edge, 10.32 mm
+const int VPADB = 184320;    // pad-ring band, 32 rows deep
+const int VCTR  = 5160960;   // die centre
+
+float vlsi_u(inout uint s){ s = hashu(s); return u2f(s); }
+
+// false colour by layer, the way a die shot's interference stains them
+vec3 vlsi_lay(int m){
+  if(m == 0)  return vec3(0.95, 0.50, 0.10);   // poly
+  if(m == 1)  return vec3(1.00, 0.72, 0.22);   // metal 1
+  if(m == 2)  return vec3(0.35, 0.90, 0.38);   // metal 2
+  if(m == 3)  return vec3(0.16, 0.72, 0.62);   // metal 3
+  if(m == 4)  return vec3(0.82, 0.16, 0.22);   // metal 4
+  if(m == 5)  return vec3(0.45, 0.58, 1.00);   // metal 5
+  if(m == 6)  return vec3(1.00, 0.85, 0.45);   // bond pad
+  if(m == 7)  return vec3(0.55, 0.16, 0.12);   // diffusion
+  if(m == 8)  return vec3(1.00, 0.88, 0.55);   // contact
+  if(m == 9)  return vec3(0.10, 0.16, 0.42);   // field and well
+  if(m == 10) return vec3(0.35, 0.09, 0.12);   // array field
+  return vec3(0.65, 0.42, 0.12);               // cell field
+}
+
+// STAIN turns the whole dielectric stack: a hue rotation about grey
+vec3 vlsi_stain(vec3 c, float a){
+  float cs = cos(a), sn = sin(a);
+  vec3 k = vec3(0.57735027);
+  return c * cs + cross(k, c) * sn + k * dot(k, c) * (1.0 - cs);
+}
+
+// pick a visible side of a rectangle's outline, band width wnm inward
+bool vlsi_ringp(ivec2 lo, ivec2 hi, int wnm, inout uint s, ivec4 win,
+                out bool horiz, out int a0, out int a1, out int cc){
+  horiz = true; a0 = 0; a1 = 0; cc = 0;
+  int side = int(vlsi_u(s) * 4.0);
+  for(int k = 0; k < 4; k++){
+    int sd = (side + k) & 3;
+    bool hz = (sd < 2);
+    int ec = (sd == 0) ? lo.y : (sd == 1) ? hi.y : (sd == 2) ? lo.x : hi.x;
+    int bc = ec + ((sd == 0 || sd == 2) ? wnm : -wnm) / 2;
+    if(hz  && (bc < win.y || bc > win.w)) continue;
+    if(!hz && (bc < win.x || bc > win.z)) continue;
+    horiz = hz; cc = bc;
+    a0 = hz ? lo.x : lo.y;
+    a1 = hz ? hi.x : hi.y;
+    return true;
+  }
+  return false;
+}
+
+// fold a (along, across-from-edge) frame onto one of the four sides
+ivec2 vlsi_smap(int s, int al, int ac){
+  if(s == 0) return ivec2(al, ac);
+  if(s == 1) return ivec2(al, VDIE - ac);
+  if(s == 2) return ivec2(ac, al);
+  return ivec2(VDIE - ac, al);
+}
+
+vec3 shape_vlsi(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  // The die is addressed, never stored: every cut, bus, cell and
+  // contact hashes from its address alone, so all points agree on the
+  // figure and any pass schedule converges to the same limit image.
+  // The point's own stream only chooses a path down and a seat.
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 668265263u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.x));
+
+  int   maxD   = int(P[0] + 0.5);
+  float mag    = exp2(P[1]);
+  uint  maskNo = uint(P[2] + 0.5);
+  float cacheF = P[3];
+  int   metals = int(P[4] + 0.5);
+  float util   = P[5];
+  float stain  = (P[6] - 0.35) * 2.6;
+  float fillL  = P[7];
+
+  // MAGNIFY is a window on the lattice, held in integers. The descent
+  // only walks nodes the window can see, so a deep dive spends its
+  // whole budget inside the frame instead of on the die it left.
+  int hw = int(float(VCTR) / mag);
+  ivec4 win = ivec4(VCTR - hw, VCTR - hw, VCTR + hw, VCTR + hw);
+  float km = mag * 2.5189112e-7;      // plate units per nm, times mag
+
+  // depth drawn with the series' budget law, leaning deeper as the
+  // window dives - the coarse furniture has left the frame by then
+  pt = hashu(pt);
+  float bias = mix(0.72, 0.20, clamp(P[1] / 14.0, 0.0, 1.0));
+  int d = int(pow(u2f(pt), bias) * float(maxD));
+
+  // furniture requests: branches only fill these in; each engine runs
+  // once, at the tail
+  int fmode = 0;                 // 0 cull, 1 wire, 2 fill, 3 dot, 4 seated, 5 tracks
+  bool fhz = true; int fa0 = 0, fa1 = 0, fcc = 0, fw = 0;
+  ivec2 flo = ivec2(0), fhi = ivec2(0);
+  ivec2 fct = ivec2(0);
+  ivec2 fa = ivec2(0);
+  vec2  fo = vec2(0.0);
+  int   lay = 1;
+  float glow = 1.0;
+  uint  tex = pt;
+  // the track engine: tN parallel runs at tPitch, occupancy addressed
+  // from tSalt, optional trimmed runs, a via share at the run ends
+  int tBase = 0, tPitch = 1, tN = 1, tR0 = 0, tR1 = 0, tW = 0;
+  int tLayA = 2, tLayB = 2, tTrim = 0;
+  float tOcc = 1.0, tVia = 0.0;
+  uint tSalt = 0u;
+
+  if(d == 0){
+    // ───── the die itself: seal, fiducials, the mask corner ─────
+    float u = vlsi_u(pt);
+    if(u < 0.52){
+      bool outer = u < 0.38;
+      ivec2 inset = ivec2(outer ? 46080 : 69120);
+      if(vlsi_ringp(inset, ivec2(VDIE) - inset, outer ? 11520 : 5760, pt, win, fhz, fa0, fa1, fcc)){
+        fmode = 1; fw = outer ? 11520 : 5760;
+      }
+      lay = outer ? min(4, metals) : 1; glow = outer ? 1.1 : 1.0;
+    } else if(u < 0.68){
+      // the stepper's alignment crosses, one per corner
+      int cnr = int(vlsi_u(pt) * 4.0);
+      ivec2 cc2 = ivec2((cnr == 1 || cnr == 3) ? VDIE - 115200 : 115200,
+                        (cnr >= 2) ? VDIE - 115200 : 115200);
+      fhz = vlsi_u(pt) < 0.5;
+      int m0 = fhz ? cc2.x : cc2.y;
+      fmode = 5; tBase = fhz ? cc2.y : cc2.x; tN = 1;
+      tR0 = m0 - 17280; tR1 = m0 + 17280; tW = 5760;
+      tLayA = 0; tLayB = 0; tSalt = uint(cnr);
+      glow = 1.2;
+    } else {
+      // the mask signs its corner in contact dots: P C 6 3
+      int g = int(vlsi_u(pt) * 4.0);
+      uint bm = g == 0 ? 0x1e8fa10u : g == 1 ? 0xf8420fu
+              : g == 2 ? 0xe87a2eu  : 0x1e0b83eu;
+      int gx0 = VDIE - 246240 + g * 50400;
+      for(int k = 0; k < 5; k++){
+        int bx = int(vlsi_u(pt) * 5.0);
+        int by = int(vlsi_u(pt) * 5.0);
+        if(((bm >> uint(24 - (by * 5 + bx))) & 1u) == 1u){
+          fmode = 3; fct = ivec2(gx0 + bx * 7200, 5040 + (4 - by) * 7200);
+          fw = 2520;
+          break;
+        }
+      }
+      lay = 8; glow = 1.3;
+    }
+  } else if(d == 1){
+    // ───── the pad ring: 85 pads a side, ESD teeth, ring buses ─────
+    int sd2 = int(vlsi_u(pt) * 4.0);
+    float u = vlsi_u(pt);
+    pt = hashu(pt);
+    int k = int(u2f(pt) * 85.0);
+    int pc = 322560 + k * 115200;
+    if(u < 0.34){
+      ivec2 p0 = vlsi_smap(sd2, pc - 34560, 57600);
+      ivec2 p1 = vlsi_smap(sd2, pc + 34560, 126720);
+      fmode = 2; flo = min(p0, p1); fhi = max(p0, p1);
+      lay = 6; glow = 1.35; tex = hashu(uint(sd2 * 97 + k));
+    } else if(u < 0.50){
+      ivec2 p0 = vlsi_smap(sd2, pc - 40320, 51840);
+      ivec2 p1 = vlsi_smap(sd2, pc + 40320, 132480);
+      if(vlsi_ringp(min(p0, p1), max(p0, p1), 5760, pt, win, fhz, fa0, fa1, fcc)){
+        fmode = 1; fw = 5760;
+      }
+      lay = min(5, metals);
+    } else if(u < 0.76){
+      // the ESD farm behind each pad: a comb of contacts
+      pt = hashu(pt);
+      int gi = int(u2f(pt) * 16.0);
+      pt = hashu(pt);
+      int gj = int(u2f(pt) * 8.0);
+      fmode = 3;
+      fct = vlsi_smap(sd2, pc - 23040 + gi * 2880 + 1440, 138240 + gj * 2880 + 1440);
+      fw = 1080;
+      lay = 8; glow = 1.1;
+    } else {
+      // three supply rings run the whole side behind the pads
+      ivec2 a2 = vlsi_smap(sd2, 0, 162720);
+      fmode = 5; fhz = sd2 < 2;
+      tBase = fhz ? a2.y : a2.x;
+      tPitch = (sd2 == 0 || sd2 == 2) ? 8640 : -8640;
+      tN = 3; tR0 = 230400; tR1 = VDIE - 230400; tW = 2880;
+      tLayA = min(5, metals); tLayB = min(4, metals);
+      tSalt = uint(sd2 * 31); glow = 1.1;
+    }
+  } else {
+    // ───── the floorplan: guillotine cuts on the row lattice ─────
+    int budget = d - 2;
+    ivec2 lo = ivec2(VPADB), hi = ivec2(VDIE - VPADB);
+    uint fp = hashu(2166136261u ^ (maskNo * 2654435761u));
+    int typ = 0;              // 0 mixed  1 cache band  2 sram cluster
+    int lvl = 0;              // 3 rows  4 datapath  5 sram  6 analog  7 channel
+    bool stopHere = false, dead = false;
+    bool cutY = false; int cc = 0; int chw = 0;
+    // no returns inside this loop: an early exit unrolled fourteen
+    // times threads its predicate through everything downstream and
+    // multiplies the D3D compile again - a break and a flag do not
+    for(int l = 0; l < 14; l++){
+      int w = hi.x - lo.x, h = hi.y - lo.y;
+      int longSide = max(w, h);
+      // does the grammar bottom out here?
+      if(typ == 2){
+        if(longSide <= 192 * VROW){ typ = 5; break; }
+      } else if(typ == 0){
+        uint la = hashu(fp ^ 0x51ed270bu);
+        if(longSide <= 48 * VROW){
+          float tu = u2f(la);
+          typ = tu < 0.56 ? 3 : tu < 0.72 ? 4 : tu < 0.84 ? 5
+              : tu < 0.90 ? 6 : 7;
+          break;
+        }
+        if(longSide <= 144 * VROW && u2f(hashu(la)) < 0.09){
+          typ = u2f(hashu(la ^ 3u)) < 0.6 ? 5 : 6;   // a hard macro, early
+          break;
+        }
+      }
+      // this node's cut is part of its identity: addressed, snapped to
+      // the row lattice, computed before the budget is consulted so a
+      // stopped point can light the channel the cut carries
+      uint ca = hashu(fp ^ 0xc2b2ae3du);
+      if(lvl == 0){
+        cutY = true;                     // the cache rides the top
+        cc = hi.y - int(cacheF * float(h));
+      } else if(typ == 1){
+        cutY = false;                    // the spine splits the halves
+        cc = (lo.x + hi.x) / 2;
+      } else {
+        cutY = (h > w) || (h == w && u2f(ca) < 0.5);
+        float f = 0.34 + 0.32 * u2f(hashu(ca));
+        cc = (cutY ? lo.y : lo.x) + int(f * float(cutY ? h : w));
+      }
+      cc = (cc / VROW) * VROW;
+      chw = VROW * (lvl == 0 ? 4 : lvl == 1 ? 3 : lvl <= 3 ? 2 : 1);
+      int e0 = cutY ? lo.y : lo.x, e1 = cutY ? hi.y : hi.x;
+      cc = clamp(cc, e0 + 12 * VROW + chw, e1 - 12 * VROW - chw);
+      if(lvl >= budget){ stopHere = true; break; }
+      // descend one side, weighted by what the window can see
+      int a1 = cc - chw, b0 = cc + chw;
+      int w0 = cutY ? win.y : win.x, w1 = cutY ? win.w : win.z;
+      int la2 = max(0, min(a1, w1) - max(e0, w0));
+      int lb2 = max(0, min(e1, w1) - max(b0, w0));
+      if(la2 + lb2 == 0){ dead = true; break; }
+      pt = hashu(pt);
+      bool sideA = float(la2) > u2f(pt) * float(la2 + lb2);
+      if(cutY){ if(sideA) hi.y = a1; else lo.y = b0; }
+      else    { if(sideA) hi.x = a1; else lo.x = b0; }
+      int ntyp = typ;
+      if(lvl == 0) ntyp = sideA ? 0 : 1;
+      if(typ == 1) ntyp = 2;
+      typ = ntyp;
+      fp = hashu(fp ^ (sideA ? 0x9e3779b9u : 0x7f4a7c15u));
+      lvl += 1;
+    }
+
+    int w = hi.x - lo.x, h = hi.y - lo.y;
+    int r = stopHere ? -1 : min(budget - lvl, 6);
+    float uF = vlsi_u(pt);
+    float tintW = mix(0.12, 0.40, fillL);
+
+    if(dead){
+      /* the window sees neither child: fmode stays 0 and the tail culls */
+    } else if(stopHere ? (uF < tintW) : (r == 0 && uF < mix(0.30, 0.62, fillL))){
+      // a field tint: how the block photographs from above
+      fmode = 2; flo = lo; fhi = hi;
+      lay = (typ == 2 || typ == 1 || typ == 5) ? 10
+          : (typ == 6) ? 9
+          : (u2f(hashu(fp ^ 0x85ebca6bu)) < 0.30 && typ == 0) ? 9 : 11;
+      glow = 0.24 + 0.40 * fillL;
+      tex = hashu(fp ^ 0xa511e9b3u);
+    } else if(stopHere ? (uF < tintW + 0.12) : (r == 0)){
+      // the block's own ring: power at the interior nodes, a thin
+      // boundary at the leaves
+      ivec2 inset = ivec2(stopHere ? VROW : 0);
+      if(vlsi_ringp(lo + inset, hi - inset, stopHere ? 2880 : 1440, pt, win, fhz, fa0, fa1, fcc)){
+        fmode = 1; fw = stopHere ? 2880 : 1440;
+      }
+      lay = stopHere ? min(5, metals) : (typ == 5 ? 3 : 1);
+      glow = stopHere ? 1.05 : 0.9;
+    } else if(stopHere && uF < tintW + 0.20){
+      // the clock's limb: centre toward a child centre, the hierarchy
+      // distributing its own heartbeat
+      ivec2 pc2 = (lo + hi) / 2;
+      int t0 = cutY ? lo.y : lo.x, t1 = cutY ? hi.y : hi.x;
+      int tgt = (vlsi_u(pt) < 0.5) ? (t0 + cc - chw) / 2 : (cc + chw + t1) / 2;
+      int c0 = cutY ? pc2.y : pc2.x;
+      fmode = 5; fhz = !cutY; tN = 1;
+      tBase = cutY ? pc2.x : pc2.y;
+      tR0 = min(c0, tgt); tR1 = max(c0, tgt); tW = 1440;
+      tLayA = min(5, metals); tLayB = tLayA; tSalt = fp ^ 77u;
+      glow = 1.35;
+    } else if(stopHere){
+      // the wiring channel the cut carries: track counts written as
+      // constant divisions so no integer-divide emulation is emitted
+      int pitch = (lvl <= 1) ? 11520 : (lvl <= 3) ? 5760 : 1440;
+      fmode = 5; fhz = cutY;
+      tPitch = pitch;
+      tN = (lvl <= 1) ? (2 * chw) / 11520 : (lvl <= 3) ? (2 * chw) / 5760 : (2 * chw) / 1440;
+      tBase = cc - chw + pitch / 2;
+      tR0 = cutY ? lo.x : lo.y; tR1 = cutY ? hi.x : hi.y;
+      tW = pitch / 2;
+      tLayA = (lvl <= 1) ? min(5, metals) : (lvl <= 3) ? min(4, metals) : 2;
+      tLayB = (lvl <= 3) ? tLayA : 3;
+      tOcc = util * 0.92; tTrim = 1; tVia = 0.14; tSalt = fp;
+    } else if(typ == 3 || typ == 4){
+      // ───── rows of standard cells; a datapath repeats a slice ────
+      bool dp = (typ == 4);
+      if(r == 1){
+        if(uF < 0.58){
+          // the supply rails: one bright line per row edge
+          fmode = 5; fhz = true; tBase = lo.y; tPitch = VROW;
+          tN = h / VROW + 1; tR0 = lo.x; tR1 = hi.x; tW = 720;
+          tLayA = 1; tLayB = 1; tSalt = fp ^ 0x1a2b3c4du;
+          glow = 1.3;
+        } else {
+          // the n-well: the top half of every other row
+          pt = hashu(pt);
+          int rr = int(u2f(pt) * float(h / VROW));
+          int y0 = lo.y + rr * VROW + (((rr & 1) == 0) ? 2880 : 0);
+          fmode = 2; flo = ivec2(lo.x, y0); fhi = ivec2(hi.x, y0 + 2880);
+          lay = 9; glow = 0.14 + 0.26 * fillL;
+        }
+      } else if(r == 2){
+        // over-the-cell routing: most of what a die shot shows
+        bool vert = uF < (dp ? 0.80 : 0.55);
+        fmode = 5; fhz = !vert;
+        tBase = (vert ? lo.x : lo.y) + 720; tPitch = 1440;
+        tN = (vert ? w : h) / 1440;
+        tR0 = vert ? lo.y : lo.x; tR1 = vert ? hi.y : hi.x;
+        tW = 720;
+        tLayA = vert ? 2 : 3; tLayB = tLayA;
+        tOcc = util * (vert ? (dp ? 0.95 : 0.60) : 0.45);
+        tTrim = (dp && vert) ? 0 : 1; tVia = 0.12;
+        tSalt = fp ^ (vert ? 40503u : 69061u);
+        glow = (dp && vert) ? 1.15 : 1.0;
+      } else if(r >= 3){
+        // the device layer: gates, diffusion, straps and contacts share
+        // one stage, so surplus depth pools its light down here. a
+        // datapath hashes by position within the slice, so all slices
+        // place the same cell - the regularity is honest
+        pt = hashu(pt);
+        int rr = int(u2f(pt) * float(h / VROW));
+        pt = hashu(pt);
+        int sl = int(u2f(pt) * float(w / VROW));
+        uint ca2 = hashu(fp ^ (uint(dp ? (sl & 3) : sl) * 83492791u)
+                            ^ (uint(rr) * 297121507u));
+        int x0 = lo.x + sl * VROW;
+        int y0 = lo.y + rr * VROW;
+        if(u2f(ca2) > util * 0.94){
+          fmode = 2; flo = ivec2(x0, y0); fhi = ivec2(x0 + VROW, y0 + VROW);
+          lay = 11; glow = 0.10 + 0.18 * fillL;   // a filler cell
+        } else {
+          int ws = (2 + int(u2f(hashu(ca2 ^ 2u)) * 3.0)) * 1440;
+          float uc = vlsi_u(pt);
+          if(uc < 0.34){
+            // the gates, with poly contacts at their feet
+            fmode = 5; fhz = false; tBase = x0 + 360; tPitch = VSITE;
+            tN = ws / VSITE; tR0 = y0 + 480; tR1 = y0 + 5280; tW = 180;
+            tLayA = 0; tLayB = 0; tVia = 0.22; tSalt = ca2;
+            glow = 1.05;
+          } else if(uc < 0.56){
+            bool nside = vlsi_u(pt) < 0.5;
+            fmode = 2;
+            flo = ivec2(x0 + 240, y0 + (nside ? 1080 : 3240));
+            fhi = ivec2(x0 + ws - 240, y0 + (nside ? 2520 : 4680));
+            lay = 7; glow = 0.55;
+          } else {
+            // metal-1 straps at the transistor rows, contacts at
+            // their ends - the lattice's last word
+            fmode = 5; fhz = true; tBase = y0 + 1800; tPitch = 2160;
+            tN = 2; tR0 = x0 + 240; tR1 = x0 + ws - 240; tW = 270;
+            tLayA = 1; tLayB = 1; tVia = 0.34; tSalt = ca2 ^ 91u;
+          }
+        }
+      }
+    } else if(typ == 5){
+      // ───── sram: banks, bitlines, then the mirrored bitcell ─────
+      // bank counts are powers of two so the bank width is a shift:
+      // D3D has no integer divide, and a variable divisor becomes a
+      // long emulation sequence at every use
+      int bxs = (w >= 9953280) ? 3 : (w >= 4976640) ? 2 : (w >= 2488320) ? 1 : 0;
+      int bys = (h >= 9953280) ? 3 : (h >= 4976640) ? 2 : (h >= 2488320) ? 1 : 0;
+      int bx = 1 << bxs, by = 1 << bys;
+      int bw = w >> bxs, bh = h >> bys;
+      pt = hashu(pt);
+      int bi = int(u2f(pt) * float(bx));
+      pt = hashu(pt);
+      int bj = int(u2f(pt) * float(by));
+      ivec2 blo = lo + ivec2(bi * bw, bj * bh);
+      ivec2 bhi = blo + ivec2(bw, bh);
+      int ay = blo.y + 3 * VROW;
+      uint ba = hashu(fp ^ (uint(bj * 8 + bi) * 2246822519u));
+      if(r == 1){
+        if(uF < 0.34){
+          // the sense band along the bank's foot
+          fmode = 2; flo = blo; fhi = ivec2(bhi.x, ay);
+          lay = 11; glow = 0.5; tex = hashu(ba ^ 5u);
+        } else if(uF < 0.62){
+          // the decoder spine up the middle: short wordline stubs
+          int sx = (blo.x + bhi.x) / 2;
+          fmode = 5; fhz = true; tBase = ay + 720; tPitch = 1440;
+          tN = (bh - 3 * VROW) / 1440;
+          tR0 = sx - 2 * VROW; tR1 = sx + 2 * VROW; tW = 480;
+          tLayA = 0; tLayB = 0; tSalt = ba ^ 13u;
+          glow = 0.9;
+        } else {
+          if(vlsi_ringp(blo, bhi, 1440, pt, win, fhz, fa0, fa1, fcc)){
+            fmode = 1; fw = 1440;
+          }
+          lay = 2;
+        }
+      } else if(r == 2){
+        // bitlines run the array; wordlines cross beneath them
+        bool bl = uF < 0.60;
+        fmode = 5; fhz = !bl;
+        tBase = bl ? blo.x + 1200 : ay + 960;
+        tPitch = bl ? 2400 : 1920;
+        tN = bl ? bw / 2400 : (bhi.y - ay) / 1920;
+        tR0 = bl ? ay : blo.x; tR1 = bl ? bhi.y : bhi.x;
+        tW = bl ? 300 : 240;
+        tLayA = bl ? 2 : 0; tLayB = tLayA;
+        tSalt = ba ^ (bl ? 3u : 7u);
+        glow = bl ? 1.05 : 0.55;
+      } else if(r >= 3){
+        // the bitcell, 2400 by 1920, mirrored with its neighbours
+        // exactly as the mask mirrors them
+        pt = hashu(pt);
+        int ci = int(u2f(pt) * float((bhi.x - blo.x) / 2400));
+        pt = hashu(pt);
+        int cj = int(u2f(pt) * float((bhi.y - ay) / 1920));
+        ivec2 cl0 = ivec2(blo.x + ci * 2400, ay + cj * 1920);
+        bool mx = (ci & 1) == 1, my = (cj & 1) == 1;
+        float uc = vlsi_u(pt);
+        if(uc < 0.30){
+          // the gate pair: mirroring swaps the two lines, which is
+          // the same pair, so the set needs no flip
+          fmode = 5; fhz = true; tPitch = 960; tN = 2;
+          tBase = cl0.y + 480;
+          tR0 = cl0.x + 240; tR1 = cl0.x + 2160; tW = 180;
+          tLayA = 0; tLayB = 0; tSalt = hashu(ba ^ uint(ci * 73 + cj));
+        } else if(uc < 0.60){
+          int lx = (vlsi_u(pt) < 0.5) ? 480 : 1500;
+          if(mx) lx = 1980 - lx;
+          fmode = 2;
+          flo = ivec2(cl0.x + lx, cl0.y + 240);
+          fhi = ivec2(cl0.x + lx + 420, cl0.y + 1680);
+          lay = 7; glow = 0.6;
+        } else {
+          int cx2 = (vlsi_u(pt) < 0.5) ? 690 : 1710;
+          int cy2 = (vlsi_u(pt) < 0.5) ? 480 : 1440;
+          if(mx) cx2 = 2400 - cx2;
+          if(my) cy2 = 1920 - cy2;
+          fmode = 3; fct = cl0 + ivec2(cx2, cy2); fw = 180;
+          lay = 8; glow = 1.3;
+        }
+      }
+    } else if(typ == 6 && r >= 1){
+      // ───── analog: the inductor, its capacitor, wide fingers ────
+      ivec2 c2 = (lo + hi) / 2;
+      int ro = (min(w, h) * 9) / 25;
+      if(uF < 0.48){
+        // four octagonal turns spiralling inward: the one place on
+        // the die that is not axis-aligned
+        float th = vlsi_u(pt) * 25.13274;
+        float k8 = cos(mod(th, 0.7853982) - 0.3926991);
+        float rr2 = (float(ro) - th * float(ro) * 0.0223) / k8;
+        float v2 = 2.0 * rnd.z - 1.0;
+        rr2 += (sign(v2) * pow(abs(v2), 0.35) * 0.5 + (rnd.w - 0.5) * 0.3)
+               * float(ro) * 0.045;
+        fmode = 4; fa = c2; fo = vec2(rr2 * cos(th), rr2 * sin(th));
+        lay = min(5, metals); glow = 1.15;
+        tex = hashu(fp ^ uint(th * 8.0));
+      } else if(uF < 0.72){
+        // the capacitor: a plate of plates
+        ivec2 q0 = c2 + ivec2(2 * VROW);
+        int cs = (min(hi.x - q0.x, hi.y - q0.y) - VROW) / 8;
+        if(cs > 0){
+          pt = hashu(pt);
+          int gi = int(u2f(pt) * 8.0);
+          pt = hashu(pt);
+          int gj = int(u2f(pt) * 8.0);
+          fmode = 2;
+          flo = q0 + ivec2(gi * cs, gj * cs);
+          fhi = flo + ivec2((cs * 3) / 5);
+          lay = min(4, metals); glow = 0.9;
+        }
+      } else {
+        // wide transistors: poly fingers combed over one diffusion
+        ivec2 f0 = lo + ivec2(2 * VROW);
+        int fw2 = w / 2 - 3 * VROW;
+        int fh2 = h / 2 - 3 * VROW;
+        if(fw2 > VSITE * 4 && fh2 > VROW){
+          if(vlsi_u(pt) < 0.4){
+            fmode = 2; flo = f0; fhi = f0 + ivec2(fw2, fh2);
+            lay = 7; glow = 0.5;
+          } else {
+            fmode = 5; fhz = false; tBase = f0.x + VSITE;
+            tPitch = 2 * VSITE; tN = fw2 / (2 * VSITE);
+            tR0 = f0.y - 720; tR1 = f0.y + fh2 + 720; tW = 240;
+            tLayA = 0; tLayB = 0; tSalt = fp ^ 29u;
+            glow = 1.05;
+          }
+        }
+      }
+    } else if(typ == 7 && r >= 1){
+      // ───── a routing channel wide enough to be its own block ────
+      bool vert = h > w;
+      fmode = 5; fhz = !vert;
+      tBase = (vert ? lo.x : lo.y) + 720; tPitch = 1440;
+      tN = (vert ? w : h) / 1440;
+      tR0 = vert ? lo.y : lo.x; tR1 = vert ? hi.y : hi.x;
+      tW = 720; tLayA = 2; tLayB = 3;
+      tOcc = util * 0.85; tTrim = 1; tVia = 0.12; tSalt = fp;
+    }
+  }
+
+  // ───── the engines: each primitive has one call site ─────
+  if(fmode == 5){
+    // pick an occupied track, trim its run, maybe seat on a via
+    bool got = false; uint ta = tSalt; int j = 0;
+    for(int k2 = 0; k2 < 4; k2++){
+      pt = hashu(pt);
+      j = int(u2f(pt) * float(tN));
+      ta = hashu(tSalt ^ (uint(j) * 2654435761u));
+      if(u2f(ta) < tOcc){ got = true; break; }
+    }
+    if(got){
+      fcc = tBase + j * tPitch;
+      fa0 = tR0; fa1 = tR1;
+      if(tTrim == 1){
+        float q0 = u2f(hashu(ta ^ 5u)), q1 = u2f(hashu(ta ^ 9u));
+        int rl = fa1 - fa0;
+        fa0 += (int(q0 * 0.5 * float(rl)) / VROW) * VROW;
+        int r1b = fa1 - (int(q1 * 0.5 * float(rl)) / VROW) * VROW;
+        fa1 = max(r1b, fa0 + VROW);
+      }
+      lay = ((j & 1) == 0) ? tLayA : tLayB;
+      tex = hashu(ta);
+      float uvia = vlsi_u(pt);
+      if(uvia < tVia){
+        fmode = 3; fw = tW;
+        fct = fhz ? ivec2(uvia < tVia * 0.5 ? fa0 : fa1, fcc)
+                  : ivec2(fcc, uvia < tVia * 0.5 ? fa0 : fa1);
+        lay = 8; glow *= 1.2;
+      } else {
+        fmode = 1; fw = tW;
+      }
+    } else fmode = 0;
+  }
+
+  bool hit = false;
+  if(fmode == 1){
+    // a wire: run clipped to the window, transverse seat bank-weighted
+    int c0 = fhz ? win.x : win.y;
+    int c1 = fhz ? win.z : win.w;
+    fa0 = max(fa0, c0); fa1 = min(fa1, c1);
+    if(fa1 > fa0){
+      int ax = fa0 + int(vlsi_u(pt) * float(fa1 - fa0));
+      float v = 2.0 * rnd.z - 1.0;
+      float bank = sign(v) * pow(abs(v), 0.35) * 0.5;
+      float across = (bank + (rnd.w - 0.5) * 0.30) * float(fw);
+      fa = fhz ? ivec2(ax, fcc) : ivec2(fcc, ax);
+      fo = fhz ? vec2(0.0, across) : vec2(across, 0.0);
+      hit = true;
+    }
+  } else if(fmode == 2){
+    // a fill: uniform in the rectangle, clipped to the window first
+    flo = max(flo, win.xy); fhi = min(fhi, win.zw);
+    if(fhi.x > flo.x && fhi.y > flo.y){
+      fa = flo;
+      fo = vec2(vlsi_u(pt) * float(fhi.x - flo.x),
+                vlsi_u(pt) * float(fhi.y - flo.y));
+      hit = true;
+    }
+  } else if(fmode == 3){
+    // a contact or via: a small square, filled edge to edge
+    if(fct.x > win.x - fw && fct.x < win.z + fw &&
+       fct.y > win.y - fw && fct.y < win.w + fw){
+      fa = fct;
+      fo = (vec2(rnd.z, rnd.w) - 0.5) * float(2 * fw) * 0.92;
+      hit = true;
+    }
+  } else if(fmode == 4){
+    hit = true;                    // seated inline (the inductor)
+  }
+
+  if(!hit){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+
+  // exact to the nanometre at any magnification: the integer offset
+  // from centre is taken before the only conversion to float
+  vec2 seat = (vec2(fa - ivec2(VCTR)) + fo) * km;
+
+  // the stack has height: each layer floats a little above the last,
+  // so the die reads flat from afar and grows relief as the window dives
+  float zl = min(6.0e-6 * mag, 0.045);
+  float zi = (lay == 0) ? 0.5 : (lay <= 6) ? float(lay)
+           : (lay == 7) ? 0.0 : (lay == 8) ? 0.8 : -0.6;
+  float z = (zi - 2.2) * zl + (rnd.y - 0.5) * zl * 0.6;
+
+  float brt = 0.72 + 0.56 * u2f(hashu(tex));
+  col = max(vlsi_stain(vlsi_lay(lay), stain) * (glow * brt), vec3(0.0));
+  return vec3(seat.x, seat.y, z);
+}`
+});
+
+</script>
 
 <!-- core: engine -->
 <script>
