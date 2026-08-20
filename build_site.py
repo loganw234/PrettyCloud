@@ -378,8 +378,21 @@ def main():
         print(f"  {slug:14s} {len(p['body']):6d} chars  {p['title'][:44]}")
     # the crawler's furniture, generated with the pages so the two
     # can never disagree about what exists
-    urls = [f"{SITE}/"] + [f"{SITE}/{s}" for s in PAGES
-                           if s != "index.html"] + [f"{SITE}/atlas/"]
+    #
+    # AND THE PLATE PAGES, which this file does not write. They come
+    # from atlas-darkroom's tools/social_cards.py - one site, two
+    # generators - so the sitemap was listing four pages while
+    # sixty-four more sat on disk unlisted. That is the same
+    # two-lists-that-disagree failure the comment above is about,
+    # arriving from the one direction it could not see. Discovered by
+    # scanning rather than by being told, so a plate added by the
+    # other tool appears here without anybody remembering to say so.
+    plate_pages = sorted(
+        f"{SITE}/p/{d.name}/" for d in (HERE / "p").iterdir()
+        if (d / "index.html").is_file()) if (HERE / "p").is_dir() else []
+    urls = ([f"{SITE}/"] + [f"{SITE}/{s}" for s in PAGES
+                            if s != "index.html"]
+            + [f"{SITE}/atlas/"] + plate_pages)
     (HERE / "sitemap.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
