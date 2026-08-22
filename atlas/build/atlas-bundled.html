@@ -8,7 +8,7 @@
      hobbled Android. -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atlas of Mathematical Forms</title>
-<meta name="description" content="Sixty-four mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
+<meta name="description" content="Sixty-eight mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
 
 <!-- SHARE CARDS. Without these a posted link unfurls as a bare URL - no
      image, no blurb - which for a page that is entirely a picture is the
@@ -18,7 +18,7 @@
 <meta property="og:url" content="https://prettycloud.io/atlas/">
 <meta property="og:site_name" content="Atlas of Mathematical Forms">
 <meta property="og:title" content="Atlas of Mathematical Forms">
-<meta property="og:description" content="Sixty-four mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
+<meta property="og:description" content="Sixty-eight mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
 <meta property="og:image" content="https://prettycloud.io/og/atlas-card.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
@@ -26,7 +26,7 @@
 <meta property="og:image:alt" content="The Hopf fibration: nested luminous rings in yellow, magenta and blue on black.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Atlas of Mathematical Forms">
-<meta name="twitter:description" content="Sixty-four mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
+<meta name="twitter:description" content="Sixty-eight mathematical objects, drawn a million points at a time in your browser. Move the levers; the picture converges as it gathers light.">
 <meta name="twitter:image" content="https://prettycloud.io/og/atlas-card.jpg">
 <meta name="twitter:image:alt" content="The Hopf fibration: nested luminous rings in yellow, magenta and blue on black.">
 
@@ -7585,6 +7585,772 @@ vec3 shape_throughput(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
   return vec3(rel.x, rel.y, 0.0);
 }
 `});
+
+</script>
+<script>
+/* ── js/plates/65-rule30.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "rule30",
+  name: "Rule Thirty",
+  roman: "LXV",
+  accent: "#e8c84a",
+  tex: "a_i' = a_{i-1}\\ \\oplus\\ (a_i \\lor a_{i+1}),\\qquad 30 = 00011110_2",
+  plain: "a′ = left XOR (center OR right);  30 = 00011110₂   (Wolfram 1983)",
+  caption: "Take a row of cells, black or white, and let each become the exclusive-or of its left neighbour with the or of itself and its right. That is the whole law: rule thirty of the two hundred fifty-six, in Wolfram's numbering, found in 1983 when he simply tried them all. Grow it from one black cell and the left flank settles into tidy diagonals while the rest dissolves into churn that passes the standard batteries of randomness tests; Mathematica shipped the centre column as its random integers. Nobody can say why. In 2019 Wolfram put thirty thousand dollars on three questions about that column alone, and all three still stand. What is known is the price: the rule is computationally irreducible, and the only road to row ten thousand runs through the ten thousand rows before it. This plate pays full fare - every point of light re-lives the whole history from the seed down to the cell it lands on, the run wound on a register of up to five hundred twelve cells so the growing cone finally meets itself round the ring and the weave begins - and DEPTH prices the rows in powers of two. Ninth of the Mk2 series, and its conscience: the one plate whose depth cannot be addressed, only earned.",
+  cam: { dist: 3.0, pitch: 0.22, tgtY: 0.0, rot: 0.0 },
+  gain: 0.55,
+  params: [
+    { label: "DEPTH",   min: 7,   max: 17,  step: 1,    def: 8    },
+    { label: "MAGNIFY", min: 0,   max: 14,  step: 0.25, def: 0    },
+    { label: "CELLS",   min: 128, max: 512, step: 32,   def: 512  },
+    { label: "COLUMNS", min: 1,   max: 16,  step: 1,    def: 1    },
+    { label: "SEEDS",   min: 1,   max: 48,  step: 1,    def: 1    },
+    { label: "WORLD",   min: 1,   max: 64,  step: 1,    def: 1    },
+    { label: "INK",     min: 0,   max: 1,   step: 0.01, def: 0.5  },
+    { label: "STAIN",   min: 0,   max: 1,   step: 0.01, def: 0.5  }
+  ],
+  glsl: `
+// ── the register: a ring of cells, iterated the only way there is ──
+// Rule 30 is computationally irreducible: no shortcut this project
+// would be willing to print reaches row t without living the t rows
+// before it. So the plate EARNS its rows - every point re-runs the
+// whole history down to the row it means to light - and DEPTH prices
+// that honesty in powers of two. The ring is up to 16 words of 32
+// cells; CELLS masks the live words so the register can narrow.
+const int R30_SUB = 1024;          // lattice units per cell
+const int R30_GUT = 24;            // gutter between columns, in cells
+
+float r30_u(inout uint s){ s = hashu(s); return u2f(s); }
+
+vec3 r30_stain(vec3 c, float a){
+  float cs = cos(a), sn = sin(a);
+  vec3 k = vec3(0.57735027);
+  return c * cs + cross(k, c) * sn + k * dot(k, c) * (1.0 - cs);
+}
+
+vec3 shape_rule30(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  // Addressed, never stored: the seed row hashes from WORLD and SEEDS
+  // alone and the evolution is the rule itself, so every point that
+  // walks to row t reconstructs the identical row t and the
+  // accumulation is one object. The point's own stream only chooses
+  // which cell to light and where to sit inside it.
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 374761393u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.x));
+
+  int   rowsT = 1 << int(P[0] + 0.5);
+  float mag   = exp2(P[1]);
+  int   C     = int(P[2] + 0.5);
+  int   V     = int(P[3] + 0.5);
+  int   seeds = int(P[4] + 0.5);
+  uint  world = uint(P[5] + 0.5) * 2654435761u;
+  float ink   = P[6];
+  float stain = (P[7] - 0.5) * 2.2;
+  int   W     = C >> 5;            // live words
+
+  // ── the sheet: V columns of the one run, side by side ──
+  int rpp  = (rowsT + V - 1) / V;            // rows per column
+  int colW = (C + R30_GUT) * R30_SUB;
+  int WU = V * colW - R30_GUT * R30_SUB;     // lattice width
+  int HU = rpp * R30_SUB;                    // lattice height
+
+  // MAGNIFY is the site's loupe only: the editions expose at 0. The
+  // dive lands on the freshest chaos, the foot of the last column.
+  ivec2 ctr = ivec2(WU / 2, HU / 2);
+  ivec2 heart = ivec2((V - 1) * colW + (C * R30_SUB) / 2, HU - HU / 8);
+  ivec2 wc = ctr + ivec2(vec2(heart - ctr) * (1.0 - 1.0 / mag));
+  int hwx = int(float(WU / 2) / mag);
+  int hwy = int(float(HU / 2) / mag);
+  ivec4 win = ivec4(wc.x - hwx, wc.y - hwy, wc.x + hwx, wc.y + hwy);
+  // plate units per lattice unit; the sheet fills a 2.6 x 3.0 frame
+  float km = min(2.6 / float(WU), 3.0 / float(HU)) * mag;
+
+  // ── choose a visible cell, uniformly over visible area, so that
+  // brightness stays a measure: columns weighted by visible area,
+  // then row and cell uniform inside the window. Dead cells cull.
+  int rlo = max(0, win.y / R30_SUB);
+  int rhi0 = min(rpp - 1, win.w / R30_SUB);
+  if(rhi0 < rlo){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+  int wsum[16];
+  int acc = 0;
+  for(int c = 0; c < 16; c++){
+    wsum[c] = 0;
+    if(c < V){
+      int x0 = max(win.x, c * colW), x1 = min(win.z, c * colW + C * R30_SUB);
+      int tmaxc = min(rpp, rowsT - c * rpp);
+      int rr = min(rhi0, tmaxc - 1) - rlo + 1;
+      if(x1 > x0 && rr > 0) wsum[c] = ((x1 - x0) >> 10) * rr;
+      acc += wsum[c];
+    }
+  }
+  if(acc <= 0){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+  pt = hashu(pt);
+  int pick = int(u2f(pt) * float(acc));
+  int cidx = 0; int run = 0;
+  for(int c = 0; c < 16; c++){
+    run += wsum[c];
+    if(pick >= run - wsum[c] && pick < run && wsum[c] > 0) cidx = c;
+  }
+  int tmax = min(rpp, rowsT - cidx * rpp);
+  int rhi = min(rhi0, tmax - 1);
+  pt = hashu(pt);
+  int tl = rlo + int(u2f(pt) * float(rhi - rlo + 1));
+  tl = min(tl, rhi);
+  int t = cidx * rpp + tl;                   // absolute row of the run
+
+  int xbase = cidx * colW;
+  int k0 = max(0, (win.x - xbase) / R30_SUB);
+  int k1 = min(C - 1, (win.z - xbase) / R30_SUB);
+  if(k1 < k0){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+  pt = hashu(pt);
+  int x = k0 + int(u2f(pt) * float(k1 - k0 + 1));
+  x = min(x, k1);
+
+  // before the cone meets itself round the ring the vacuum is dead
+  // for certain: cull without paying for the rows
+  if(seeds == 1 && 2 * t < C && (x < C / 2 - t || x > C / 2 + t)){
+    col = vec3(0.0); return vec3(0.0, -20000.0, 0.0);
+  }
+
+  // ── the seed row: SEEDS cells, addressed from WORLD ──
+  uint row[16];
+  for(int w = 0; w < 16; w++) row[w] = 0u;
+  uint sa = hashu(world ^ 0x51EDu);
+  for(int s = 0; s < 48; s++){
+    if(s >= seeds) break;
+    // sequenced explicitly: a side-effecting call inside a ternary is
+    // evaluated differently by the D3D and GL backends, and the seed
+    // row must be the same object everywhere
+    int sx = C >> 1;
+    if(s > 0){ sa = hashu(sa); sx = int(u2f(sa) * float(C)); }
+    sx = min(sx, C - 1);
+    int sw = sx >> 5;
+    uint sb = 1u << uint(sx & 31);
+    for(int w = 0; w < 16; w++) if(w == sw) row[w] |= sb;
+  }
+
+  // ── the toll: t applications of the rule, none of them skippable.
+  // Interior words take their neighbours statically; only the ring's
+  // two ends pay a runtime select, once per row.
+  uint nw[16];
+  for(int it = 0; it < t; it++){
+    uint rowLast = 0u;
+    for(int w = 0; w < 16; w++) if(w == W - 1) rowLast = row[w];
+    for(int w = 0; w < 15; w++){
+      if(w >= W) break;
+      uint lw = (w == 0) ? rowLast : row[w - 1];
+      uint rw = (w == W - 1) ? row[0] : row[w + 1];
+      uint cw = row[w];
+      uint L = (cw << 1) | (lw >> 31);
+      uint R = (cw >> 1) | (rw << 31);
+      nw[w] = L ^ (cw | R);
+    }
+    if(W == 16){
+      uint lw = row[14];
+      uint cw = row[15];
+      uint L = (cw << 1) | (lw >> 31);
+      uint R = (cw >> 1) | (row[0] << 31);
+      nw[15] = L ^ (cw | R);
+    }
+    for(int w = 0; w < 16; w++) if(w < W) row[w] = nw[w];
+  }
+
+  // the cell, and its shoulders for a whisper of texture
+  uint wsel = 0u, lsel = 0u, rsel = 0u;
+  int xl = (x == 0) ? C - 1 : x - 1;
+  int xr = (x == C - 1) ? 0 : x + 1;
+  for(int w = 0; w < 16; w++){
+    if(w == (x >> 5)) wsel = row[w];
+    if(w == (xl >> 5)) lsel = row[w];
+    if(w == (xr >> 5)) rsel = row[w];
+  }
+  if(((wsel >> uint(x & 31)) & 1u) == 0u){
+    col = vec3(0.0); return vec3(0.0, -20000.0, 0.0);
+  }
+  uint nbh = (((lsel >> uint(xl & 31)) & 1u) << 1) | ((rsel >> uint(xr & 31)) & 1u);
+
+  // seat inside the cell square, exact to the lattice: the integer
+  // offset from the window centre is taken before the only float
+  ivec2 cellLo = ivec2(xbase + x * R30_SUB, tl * R30_SUB);
+  float fox = r30_u(pt);
+  float foy = r30_u(pt);
+  vec2 seat = (vec2(cellLo - wc) + vec2(fox, foy) * float(R30_SUB) * 0.94) * km;
+
+  float band = float(t) / float(rowsT);
+  float tone = 0.55 + 0.45 * float(nbh) / 3.0;
+  col = pal(0.12 + 0.10 * band + 0.06 * float(nbh),
+            vec3(0.52, 0.46, 0.36), vec3(0.46, 0.42, 0.34),
+            vec3(1.0, 0.9, 0.65), vec3(0.05, 0.18, 0.42))
+        * tone * (0.55 + 1.5 * ink);
+  col = r30_stain(col, stain);
+  float z = (rnd.y - 0.5) * 0.02;
+  return vec3(seat.x, -seat.y, z);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/66-nested.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "nested",
+  name: "The Nested Rule",
+  roman: "LXVI",
+  accent: "#6fe0b8",
+  tex: "a_i' = a_{i-1} + a_{i+1}\\ (\\mathrm{mod}\\ p),\\qquad \\tbinom{n}{k}\\equiv\\textstyle\\prod_i \\tbinom{n_i}{k_i}\\ (\\mathrm{mod}\\ p)",
+  plain: "a′ = left + right (mod p);  C(n,k) ≡ Π C(nᵢ,kᵢ) mod p   (Lucas 1878)",
+  caption: "Its neighbour buys every row; this is the rule the algebra lets off. Sum your two neighbours modulo a prime and iterate: the additive automaton - rule 90 when the prime is two - growing Pascal's triangle mod p from a single one. In 1852 Kummer read the divisibility of binomial coefficients off the carries of base-p addition, and in 1878 Lucas made it a product over digits, so every cell of row sixteen million is an arithmetic fact about its own address, reachable with no history at all. That theorem is the renderer: each point picks its cell's digits from the window down, twenty-four choices at the deepest setting, and only nonzero cells are ever constructed, so the triangle Sierpinski drew in 1915 assembles at any depth with nothing spent on the voids. The nonzero residues carry the colour. Tenth of the Mk2 series, and the thirtieth rule's opposite number: DEPTH here is not a price but a preference, and past the resolving power of any sheet the unresolved scales go on depositing their lawful share of light, which is all a measure ever promised.",
+  cam: { dist: 3.0, pitch: 0.26, tgtY: 0.0, rot: 0.0 },
+  gain: 0.55,
+  params: [
+    { label: "DEPTH",     min: 4,  max: 24,  step: 1,    def: 12  },
+    { label: "MAGNIFY",   min: 0,  max: 22,  step: 0.25, def: 0   },
+    { label: "NTH PRIME", min: 1,  max: 4,   step: 1,    def: 1   },
+    { label: "TINT",      min: 0,  max: 1,   step: 0.01, def: 0.6 },
+    { label: "BAND",      min: 0,  max: 1,   step: 0.01, def: 0.25},
+    { label: "SLAB Z",    min: 0,  max: 0.4, step: 0.005,def: 0.08},
+    { label: "INK",       min: 0,  max: 1,   step: 0.01, def: 0.5 },
+    { label: "STAIN",     min: 0,  max: 1,   step: 0.01, def: 0.5 }
+  ],
+  glsl: `
+// ── the rule algebra forgives ──
+// The additive automaton a' = left + right (mod p) grows Pascal's
+// triangle mod p, and Kummer and Lucas reduced its every cell to digit
+// arithmetic: C(n,k) mod p is the product of the digit binomials of n
+// and k base p. So this plate never iterates. A point picks the digits
+// of its cell most-significant-first, each level weighted by what the
+// window can see, and lands on row sixteen million as cheaply as row
+// four - the exact opposite of its neighbour, which buys every row.
+// Nonzero cells only are constructed (b <= a at every digit), so no
+// point is wasted on the voids and brightness stays a measure.
+float nst_u(inout uint s){ s = hashu(s); return u2f(s); }
+
+vec3 nst_stain(vec3 c, float a){
+  float cs = cos(a), sn = sin(a);
+  vec3 k = vec3(0.57735027);
+  return c * cs + cross(k, c) * sn + k * dot(k, c) * (1.0 - cs);
+}
+
+vec3 shape_nested(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 668265263u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.x));
+
+  int   D    = int(P[0] + 0.5);
+  float mag  = exp2(P[1]);
+  int   pidx = int(P[2] + 0.5);
+  int   p    = (pidx <= 1) ? 2 : (pidx == 2) ? 3 : (pidx == 3) ? 5 : 7;
+  float tint = P[3];
+  float band = P[4];
+  float slab = P[5];
+  float ink  = P[6];
+  float stain = (P[7] - 0.5) * 2.2;
+
+  // rows R = p^L, the smallest power of p reaching 2^DEPTH
+  int L = 0, R = 1;
+  int target = 1 << D;
+  for(int i = 0; i < 24; i++){
+    if(R >= target) break;
+    R *= p; L += 1;
+  }
+
+  // lattice: cell (n,k) sits at xu = 2k + (R-1-n), yu = 2n; cells are
+  // 2x2 units on the alternating brick lattice, the triangle ~square
+  int WU = 2 * R - 1;
+  ivec2 ctr = ivec2(WU / 2, R);
+  // the dive anchors just inside the bottom-left corner: the k = 0
+  // edge is C(n,0) = 1 for every p, a solid rail with the nested
+  // corner replicas hanging off it at every scale. The centre is the
+  // one place NOT to dive: for p = 2 it is the gasket's great void.
+  ivec2 heart = ivec2(R / 64, 2 * R - R / 32);
+  ivec2 wc = ctr + ivec2(vec2(heart - ctr) * (1.0 - 1.0 / mag));
+  int hwx = int(float(WU / 2) / mag);
+  int hwy = int(float(R) / mag);
+  ivec4 win = ivec4(wc.x - hwx, wc.y - hwy, wc.x + hwx, wc.y + hwy);
+  float km = 2.85 / float(2 * R) * mag;
+
+  // ── the digit descent: 28 candidate digit pairs per level ──
+  int n0 = 0, k0 = 0, s = R / p;
+  int v = 1;
+  bool dead = false;
+  uint lineage = 2166136261u;
+  for(int lev = 0; lev < L; lev++){
+    float w[28];
+    float wsum = 0.0;
+    for(int a = 0; a < 7; a++){
+      if(a >= p) break;
+      int ny0 = 2 * (n0 + a * s), ny1 = ny0 + 2 * s;
+      int oy = min(ny1, win.w) - max(ny0, win.y);
+      for(int b = 0; b < 7; b++){
+        if(b > a) break;
+        int sl = (a * (a + 1)) / 2 + b;
+        w[sl] = 0.0;
+        if(oy > 0){
+          // conservative box of the child's parallelogram
+          int xlo = 2 * (k0 + b * s) + (R - 1) - (n0 + (a + 1) * s - 1);
+          int xhi = 2 * (k0 + b * s + s - 1) + (R - 1) - (n0 + a * s);
+          int ox = min(xhi + 1, win.z) - max(xlo, win.x);
+          if(ox > 0) w[sl] = float(oy) * float(ox);
+        }
+        wsum += w[sl];
+      }
+    }
+    if(wsum <= 0.0){ dead = true; break; }
+    pt = hashu(pt);
+    float pick = u2f(pt) * wsum;
+    float run = 0.0;
+    int ca = 0, cb = 0, cc = 1;
+    for(int a = 0; a < 7; a++){
+      if(a >= p) break;
+      for(int b = 0; b < 7; b++){
+        if(b > a) break;
+        int sl = (a * (a + 1)) / 2 + b;
+        run += w[sl];
+        if(pick < run && pick >= run - w[sl] && w[sl] > 0.0){
+          ca = a; cb = b;
+          // the digit binomial: a constant per slot, never divisible
+          // by p since every factor is below it
+          cc = (sl == 0) ? 1 : (sl == 1) ? 1 : (sl == 2) ? 1
+             : (sl == 3) ? 1 : (sl == 4) ? 2 : (sl == 5) ? 1
+             : (sl == 6) ? 1 : (sl == 7) ? 3 : (sl == 8) ? 3 : (sl == 9) ? 1
+             : (sl == 10) ? 1 : (sl == 11) ? 4 : (sl == 12) ? 6 : (sl == 13) ? 4 : (sl == 14) ? 1
+             : (sl == 15) ? 1 : (sl == 16) ? 5 : (sl == 17) ? 10 : (sl == 18) ? 10 : (sl == 19) ? 5 : (sl == 20) ? 1
+             : (sl == 21) ? 1 : (sl == 22) ? 6 : (sl == 23) ? 15 : (sl == 24) ? 20 : (sl == 25) ? 15 : (sl == 26) ? 6 : 1;
+        }
+      }
+    }
+    v = (v * cc) % p;
+    n0 += ca * s; k0 += cb * s;
+    lineage = hashu(lineage ^ (uint(ca * 7 + cb) + 1u) * 2654435761u);
+    s /= p;
+  }
+  if(dead){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+
+  // the cell, exact to the lattice: integer offset from the window
+  // centre first, the jitter after, in float
+  int xu = 2 * k0 + (R - 1 - n0);
+  ivec2 cellC = ivec2(xu + 1, 2 * n0 + 1);
+  float fx = nst_u(pt);
+  float fy = nst_u(pt);
+  vec2 seat = (vec2(cellC - wc) + (vec2(fx, fy) - 0.5) * 1.88) * km;
+
+  float lv = float(n0) / float(R);
+  float hue = (p == 2) ? 0.0 : float(v - 1) / float(p - 1);
+  col = pal(0.34 + 0.45 * hue * tint + 0.10 * lv * band,
+            vec3(0.44, 0.52, 0.46), vec3(0.42, 0.48, 0.44),
+            vec3(0.95, 1.0, 0.9), vec3(0.12, 0.40, 0.62))
+        * (0.5 + 1.4 * ink) * (1.0 - band * 0.55 * (1.0 - lv));
+  col = nst_stain(col, stain);
+  float z = ((u2f(hashu(lineage)) - 0.5) + (rnd.z - 0.5) * 0.3) * slab;
+  return vec3(seat.x, -seat.y, z);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/67-universal.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "universal",
+  name: "The Universal Rule",
+  roman: "LXVII",
+  accent: "#e09a6f",
+  tex: "a_i' = (a_i \\lor a_{i+1})\\land\\lnot(a_{i-1}\\land a_i\\land a_{i+1}),\\qquad 110 = 01101110_2",
+  plain: "a′ = (center OR right) AND NOT(all three);  110 = 01101110₂   (Cook: universal)",
+  caption: "One rule to the right of pure chaos sits something stranger: computation. Rule 110 runs on an ether, a fourteen-cell vacuum that copies itself four cells over every step, and against that background localized packets - gliders - travel, collide, annihilate, and hand information along. In 1985 Wolfram conjectured the rule was universal; Matthew Cook proved it, presented it at Santa Fe in 1998, was kept out of the proceedings by a court order, and published in 2004: any computation whatever can be staged as a traffic of these gliders, cyclic tag systems all the way down. This plate is built the way the proof is: the seed row is the pure vacuum with DEFECTS single cells flipped, and everything that ever appears afterwards is the rule's own doing. The light is the vacuum subtracted - a cell whose surrounding phrase matches no displacement of the ether burns as particle, ether displaced from the reference phase reads as domain, tinted by its own measured displacement, and the undisturbed fabric barely glows. Eleventh of the Mk2 series: the worldlines are not drawn, they are what refuses to be background.",
+  cam: { dist: 3.0, pitch: 0.22, tgtY: 0.0, rot: 0.0 },
+  gain: 0.55,
+  params: [
+    { label: "DEPTH",   min: 7, max: 15,  step: 1,    def: 9    },
+    { label: "MAGNIFY", min: 0, max: 14,  step: 0.25, def: 0    },
+    { label: "DEFECTS", min: 0, max: 48,  step: 1,    def: 6    },
+    { label: "WORLD",   min: 1, max: 64,  step: 1,    def: 1    },
+    { label: "FABRIC",  min: 0, max: 1,   step: 0.01, def: 0.30 },
+    { label: "DOMAINS", min: 0, max: 1,   step: 0.01, def: 0.40 },
+    { label: "COLUMNS", min: 1, max: 16,  step: 1,    def: 1    },
+    { label: "STAIN",   min: 0, max: 1,   step: 0.01, def: 0.5  }
+  ],
+  glsl: `
+// ── the vacuum, and what survives against it ──
+// Rule 110 runs on an ether: a 14-cell background that reproduces
+// itself shifted four cells per step, ether(t,x) = tile bit (x+4t)
+// mod 14. On that vacuum, localized packets - Cook's gliders - carry
+// information, collide, and compute; his proof that this single line
+// of boolean algebra is a universal computer leans entirely on them.
+// The ring is 448 cells, exactly 32 ether tiles, so the vacuum closes
+// seamlessly; DEFECTS flips single cells of the initial ether and
+// everything else that ever appears is the rule's own doing.
+//
+// Three channels of light, all measured per cell after the honest
+// iteration: a cell whose surrounding 14-cell phrase matches NO
+// rotation of the tile is particle and burns; a cell in ether that
+// is displaced from the reference phase is domain, tinted by its own
+// measured displacement; undisturbed ether is fabric, faint.
+const int U110_SUB = 1024;
+const int U110_GUT = 21;           // gutter between columns, in cells
+const int U110_TILE = 0x3b23;      // the ether tile, LSB = cell 0
+
+float u110_u(inout uint s){ s = hashu(s); return u2f(s); }
+
+vec3 u110_stain(vec3 c, float a){
+  float cs = cos(a), sn = sin(a);
+  vec3 k = vec3(0.57735027);
+  return c * cs + cross(k, c) * sn + k * dot(k, c) * (1.0 - cs);
+}
+
+vec3 shape_universal(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 951274213u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.x));
+
+  int   rowsT = 1 << int(P[0] + 0.5);
+  float mag   = exp2(P[1]);
+  int   defs  = int(P[2] + 0.5);
+  uint  world = uint(P[3] + 0.5) * 2654435761u;
+  float fab   = P[4];
+  float dom   = P[5];
+  int   V     = int(P[6] + 0.5);
+  float stain = (P[7] - 0.5) * 2.2;
+  const int C = 448;
+
+  // ── the sheet, V columns of the one run ──
+  int rpp  = (rowsT + V - 1) / V;
+  int colW = (C + U110_GUT) * U110_SUB;
+  int WU = V * colW - U110_GUT * U110_SUB;
+  int HU = rpp * U110_SUB;
+  ivec2 ctr = ivec2(WU / 2, HU / 2);
+  ivec2 heart = ivec2((V - 1) * colW + (C * U110_SUB) / 2, HU - HU / 8);
+  ivec2 wc = ctr + ivec2(vec2(heart - ctr) * (1.0 - 1.0 / mag));
+  int hwx = int(float(WU / 2) / mag);
+  int hwy = int(float(HU / 2) / mag);
+  ivec4 win = ivec4(wc.x - hwx, wc.y - hwy, wc.x + hwx, wc.y + hwy);
+  float km = min(2.6 / float(WU), 3.0 / float(HU)) * mag;
+
+  // ── choose a visible cell, uniform over visible area ──
+  int rlo = max(0, win.y / U110_SUB);
+  int rhi0 = min(rpp - 1, win.w / U110_SUB);
+  if(rhi0 < rlo){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+  int wsum[16];
+  int acc = 0;
+  for(int c = 0; c < 16; c++){
+    wsum[c] = 0;
+    if(c < V){
+      int x0 = max(win.x, c * colW), x1 = min(win.z, c * colW + C * U110_SUB);
+      int tmaxc = min(rpp, rowsT - c * rpp);
+      int rr = min(rhi0, tmaxc - 1) - rlo + 1;
+      if(x1 > x0 && rr > 0) wsum[c] = ((x1 - x0) >> 10) * rr;
+      acc += wsum[c];
+    }
+  }
+  if(acc <= 0){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+  pt = hashu(pt);
+  int pick = int(u2f(pt) * float(acc));
+  int cidx = 0; int run = 0;
+  for(int c = 0; c < 16; c++){
+    run += wsum[c];
+    if(pick >= run - wsum[c] && pick < run && wsum[c] > 0) cidx = c;
+  }
+  int tmax = min(rpp, rowsT - cidx * rpp);
+  int rhi = min(rhi0, tmax - 1);
+  pt = hashu(pt);
+  int tl = rlo + int(u2f(pt) * float(rhi - rlo + 1));
+  tl = min(tl, rhi);
+  int t = cidx * rpp + tl;
+
+  int xbase = cidx * colW;
+  int k0 = max(0, (win.x - xbase) / U110_SUB);
+  int k1 = min(C - 1, (win.z - xbase) / U110_SUB);
+  if(k1 < k0){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+  pt = hashu(pt);
+  int x = k0 + int(u2f(pt) * float(k1 - k0 + 1));
+  x = min(x, k1);
+
+  // ── the seed row: the pure vacuum, then DEFECTS flipped cells ──
+  uint row[14];
+  row[0] = 0x3ec8fb23u; row[1] = 0x23ec8fb2u; row[2] = 0xb23ec8fbu;
+  row[3] = 0xfb23ec8fu; row[4] = 0x8fb23ec8u; row[5] = 0xc8fb23ecu;
+  row[6] = 0xec8fb23eu; row[7] = 0x3ec8fb23u; row[8] = 0x23ec8fb2u;
+  row[9] = 0xb23ec8fbu; row[10] = 0xfb23ec8fu; row[11] = 0x8fb23ec8u;
+  row[12] = 0xc8fb23ecu; row[13] = 0xec8fb23eu;
+  uint da = hashu(world ^ 0xD3F3u);
+  for(int d = 0; d < 48; d++){
+    if(d >= defs) break;
+    da = hashu(da);
+    int px = int(u2f(da) * float(C));
+    px = min(px, C - 1);
+    int pw = px >> 5;
+    uint pb = 1u << uint(px & 31);
+    for(int w = 0; w < 14; w++) if(w == pw) row[w] ^= pb;
+  }
+
+  // ── the toll: t applications of rule 110, the wrap fully static ──
+  uint nw[14];
+  for(int it = 0; it < t; it++){
+    for(int w = 0; w < 14; w++){
+      uint lw = (w == 0) ? row[13] : row[w - 1];
+      uint rw = (w == 13) ? row[0] : row[w + 1];
+      uint cw = row[w];
+      uint L = (cw << 1) | (lw >> 31);
+      uint R = (cw >> 1) | (rw << 31);
+      nw[w] = (cw | R) & ~(L & cw & R);
+    }
+    for(int w = 0; w < 14; w++) row[w] = nw[w];
+  }
+
+  // the cell
+  uint wsel = 0u;
+  for(int w = 0; w < 14; w++) if(w == (x >> 5)) wsel = row[w];
+  uint bit = (wsel >> uint(x & 31)) & 1u;
+  if(bit == 0u){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+
+  // the surrounding phrase: 14 cells starting at x-6, via the two
+  // words that span it
+  int x0p = x - 6; if(x0p < 0) x0p += C;
+  int wA = x0p >> 5;
+  int wB = wA + 1; if(wB == 14) wB = 0;
+  uint sA = 0u, sB = 0u;
+  for(int w = 0; w < 14; w++){ if(w == wA) sA = row[w]; if(w == wB) sB = row[w]; }
+  uint sh = uint(x0p & 31);
+  uint seg = (sh == 0u) ? sA : ((sA >> sh) | (sB << (32u - sh)));
+  uint phrase = seg & 0x3FFFu;
+
+  // which displacement of the vacuum is this, if any? phrase matches
+  // offset o when phrase == tile rotated right by o; pure phase-0
+  // ether at (t, x) matches o0 = (x - 6 + 4t) mod 14
+  int oMatch = -1;
+  for(int o = 0; o < 14; o++){
+    uint rot = ((uint(U110_TILE) >> uint(o)) | (uint(U110_TILE) << uint(14 - o))) & 0x3FFFu;
+    if(phrase == rot) oMatch = o;
+  }
+  int o0 = (x - 6 + 4 * t) % 14; if(o0 < 0) o0 += 14;
+
+  float glow;
+  float hue;
+  if(oMatch < 0){
+    // particle: no displacement of the vacuum explains this cell
+    glow = 2.1;
+    hue = 0.06;
+  } else {
+    int delta = oMatch - o0; if(delta < 0) delta += 14;
+    if(delta == 0){
+      if(fab <= 0.003){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+      glow = 0.16 * fab;
+      hue = 0.62;
+    } else {
+      if(dom <= 0.003){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+      // domain: tinted by its own measured displacement
+      glow = 0.34 * dom;
+      hue = 0.30 + 0.55 * float(delta) / 14.0;
+    }
+  }
+
+  ivec2 cellLo = ivec2(xbase + x * U110_SUB, tl * U110_SUB);
+  float fox = u110_u(pt);
+  float foy = u110_u(pt);
+  vec2 seat = (vec2(cellLo - wc) + vec2(fox, foy) * float(U110_SUB) * 0.94) * km;
+
+  col = pal(hue,
+            vec3(0.50, 0.44, 0.38), vec3(0.48, 0.42, 0.40),
+            vec3(1.0, 0.9, 0.7), vec3(0.02, 0.22, 0.48))
+        * glow;
+  col = u110_stain(col, stain);
+  float z = (rnd.y - 0.5) * 0.02;
+  return vec3(seat.x, -seat.y, z);
+}`
+});
+
+</script>
+<script>
+/* ── js/plates/68-rulespace.js ── */
+"use strict";
+Atlas.registerPlate({
+  id: "rulespace",
+  name: "The Rule Space",
+  roman: "LXVIII",
+  accent: "#c9b8ff",
+  tex: "a_i' = f(a_{i-1}, a_i, a_{i+1}),\\qquad f \\in \\{0,1\\}^{\\{0,1\\}^3},\\qquad |\\,\\mathcal{F}\\,| = 256",
+  plain: "a′ = f(left, center, right) for every possible f: all 256 elementary rules",
+  caption: "Two states, three neighbours: there are exactly two hundred fifty-six possible laws, and this plate runs all of them at once, arranged by their Wolfram number, high nibble down and low nibble across. Nothing here is a thumbnail - every tile is its own automaton, grown live from its own seed on a ring of one hundred twenty-eight cells the same honest way as plate LXV, and the tint is measured rather than cited: each tile's colour follows the activity its opening rows actually exhibit, so Wolfram's four classes sort themselves onto the sheet - the stillborn, the periodic, the boiling, and the strange few that compute. Under mirror and complement only eighty-eight of the two hundred fifty-six are genuinely different, which you can check by eye: the sheet nearly repeats itself in reflections. The dive lands where it must, on the tile of rule thirty. Twelfth of the Mk2 series and the suite's colophon: rules thirty, ninety and one hundred ten hang here as three tiles among the two hundred fifty-six.",
+  cam: { dist: 3.0, pitch: 0.30, tgtY: 0.0, rot: 0.0 },
+  gain: 0.5,
+  params: [
+    { label: "DEPTH",   min: 5, max: 9,   step: 1,    def: 7    },
+    { label: "MAGNIFY", min: 0, max: 12,  step: 0.25, def: 0    },
+    { label: "SEEDING", min: 1, max: 16,  step: 1,    def: 1    },
+    { label: "WORLD",   min: 1, max: 64,  step: 1,    def: 1    },
+    { label: "TINT",    min: 0, max: 1,   step: 0.01, def: 0.6  },
+    { label: "FLARE",   min: 0, max: 1,   step: 0.01, def: 0.35 },
+    { label: "INK",     min: 0, max: 1,   step: 0.01, def: 0.5  },
+    { label: "STAIN",   min: 0, max: 1,   step: 0.01, def: 0.5  }
+  ],
+  glsl: `
+// ── the whole book at once ──
+// Two states, three neighbours: 2^(2^3) = 256 possible laws, the
+// entire space of elementary cellular automata, arranged by their
+// Wolfram number - high nibble down, low nibble across. Every tile is
+// computed live from its own seed the same honest way as LXV, on a
+// ring of 128 cells; nothing is a thumbnail. The tint is measured,
+// not cited: each tile's hue follows the activity its own opening
+// rows exhibit, so the four classes sort themselves by behaviour.
+const int RSP_SUB  = 512;              // lattice units per cell
+const int RSP_TW   = 65536;            // tile side: 128 cells
+const int RSP_GUT  = 8192;             // gutter: 16 cells
+const int RSP_PIT  = 73728;            // tile pitch
+const int RSP_TOT  = 16 * 73728 - 8192;
+
+float rsp_u(inout uint s){ s = hashu(s); return u2f(s); }
+
+vec3 rsp_stain(vec3 c, float a){
+  float cs = cos(a), sn = sin(a);
+  vec3 k = vec3(0.57735027);
+  return c * cs + cross(k, c) * sn + k * dot(k, c) * (1.0 - cs);
+}
+
+int rsp_pop(uint v){
+  v = v - ((v >> 1) & 0x55555555u);
+  v = (v & 0x33333333u) + ((v >> 2) & 0x33333333u);
+  v = (v + (v >> 4)) & 0x0F0F0F0Fu;
+  return int((v * 0x01010101u) >> 24);
+}
+
+vec3 shape_rulespace(vec2 q, vec4 rnd, uint seed, float P[8], out vec3 col){
+  uint pt = hashu(seed ^ hashu(floatBitsToUint(q.x))
+                       ^ hashu(floatBitsToUint(q.y) * 217645177u));
+  pt = hashu(pt ^ floatBitsToUint(rnd.x));
+
+  int   rowsT = 1 << int(P[0] + 0.5);
+  float mag   = exp2(P[1]);
+  int   seeds = int(P[2] + 0.5);
+  uint  world = uint(P[3] + 0.5) * 2654435761u;
+  float tint  = P[4];
+  float flare = P[5];
+  float ink   = P[6];
+  float stain = (P[7] - 0.5) * 2.2;
+  const int C = 128;
+  int rowPitch = RSP_TW / rowsT;       // exact: rowsT divides 65536
+
+  // ── the survey sheet, and the dive onto rule thirty's tile ──
+  ivec2 ctr = ivec2(RSP_TOT / 2, RSP_TOT / 2);
+  ivec2 heart = ivec2(14 * RSP_PIT + RSP_TW / 2, 1 * RSP_PIT + (RSP_TW * 3) / 4);
+  ivec2 wc = ctr + ivec2(vec2(heart - ctr) * (1.0 - 1.0 / mag));
+  int hw = int(float(RSP_TOT / 2) / mag);
+  ivec4 win = ivec4(wc.x - hw, wc.y - hw, wc.x + hw, wc.y + hw);
+  float km = 2.85 / float(RSP_TOT) * mag;
+
+  // ── choose a tile: the grid is separable, so the two axes weight
+  // independently by clipped extent ──
+  int wx[16]; int accx = 0;
+  int wy[16]; int accy = 0;
+  for(int g = 0; g < 16; g++){
+    int a0 = max(win.x, g * RSP_PIT), a1 = min(win.z, g * RSP_PIT + RSP_TW);
+    wx[g] = max(0, a1 - a0) >> 9;
+    accx += wx[g];
+    int b0 = max(win.y, g * RSP_PIT), b1 = min(win.w, g * RSP_PIT + RSP_TW);
+    wy[g] = max(0, b1 - b0) >> 9;
+    accy += wy[g];
+  }
+  if(accx <= 0 || accy <= 0){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+  pt = hashu(pt);
+  int px2 = int(u2f(pt) * float(accx));
+  int gx = 0; int runx = 0;
+  for(int g = 0; g < 16; g++){
+    runx += wx[g];
+    if(px2 >= runx - wx[g] && px2 < runx && wx[g] > 0) gx = g;
+  }
+  pt = hashu(pt);
+  int py2 = int(u2f(pt) * float(accy));
+  int gy = 0; int runy = 0;
+  for(int g = 0; g < 16; g++){
+    runy += wy[g];
+    if(py2 >= runy - wy[g] && py2 < runy && wy[g] > 0) gy = g;
+  }
+  int rule = gy * 16 + gx;
+  ivec2 tlo = ivec2(gx * RSP_PIT, gy * RSP_PIT);
+
+  // ── row and cell inside the tile, clipped to the window ──
+  int rlo = max(0, (win.y - tlo.y) / rowPitch);
+  int rhi = min(rowsT - 1, (win.w - tlo.y) / rowPitch);
+  int k0 = max(0, (win.x - tlo.x) / RSP_SUB);
+  int k1 = min(C - 1, (win.z - tlo.x) / RSP_SUB);
+  if(rhi < rlo || k1 < k0){ col = vec3(0.0); return vec3(0.0, -20000.0, 0.0); }
+  pt = hashu(pt);
+  int t = rlo + int(u2f(pt) * float(rhi - rlo + 1));
+  t = min(t, rhi);
+  pt = hashu(pt);
+  int x = k0 + int(u2f(pt) * float(k1 - k0 + 1));
+  x = min(x, k1);
+
+  // ── the tile's seed row, addressed from WORLD and its own number ──
+  uint row[4];
+  row[0] = 0u; row[1] = 0u; row[2] = 0u; row[3] = 0u;
+  uint sa = hashu(world ^ (uint(rule) * 668265263u) ^ 0xA11Cu);
+  for(int s = 0; s < 16; s++){
+    if(s >= seeds) break;
+    int sx = C >> 1;
+    if(s > 0){ sa = hashu(sa); sx = int(u2f(sa) * float(C)); }
+    sx = min(sx, C - 1);
+    int sw = sx >> 5;
+    uint sb = 1u << uint(sx & 31);
+    for(int w = 0; w < 4; w++) if(w == sw) row[w] |= sb;
+  }
+
+  // ── the toll, generic this time: eight neighbourhood masks, the
+  // rule's own bits deciding which survive. Activity is measured on
+  // the opening thirty-two rows and becomes the tile's tint.
+  uint nw[4];
+  int act = 0, actN = 0;
+  for(int it = 0; it < t; it++){
+    for(int w = 0; w < 4; w++){
+      uint lw = (w == 0) ? row[3] : row[w - 1];
+      uint rw = (w == 3) ? row[0] : row[w + 1];
+      uint cw = row[w];
+      uint L = (cw << 1) | (lw >> 31);
+      uint R = (cw >> 1) | (rw << 31);
+      uint nL = ~L, nC = ~cw, nR = ~R;
+      uint acc = 0u;
+      if((rule & 1)   != 0) acc |= nL & nC & nR;
+      if((rule & 2)   != 0) acc |= nL & nC & R;
+      if((rule & 4)   != 0) acc |= nL & cw & nR;
+      if((rule & 8)   != 0) acc |= nL & cw & R;
+      if((rule & 16)  != 0) acc |= L & nC & nR;
+      if((rule & 32)  != 0) acc |= L & nC & R;
+      if((rule & 64)  != 0) acc |= L & cw & nR;
+      if((rule & 128) != 0) acc |= L & cw & R;
+      nw[w] = acc;
+    }
+    if(it < 32){
+      act += rsp_pop(nw[0] ^ row[0]) + rsp_pop(nw[1] ^ row[1])
+           + rsp_pop(nw[2] ^ row[2]) + rsp_pop(nw[3] ^ row[3]);
+      actN += 1;
+    }
+    for(int w = 0; w < 4; w++) row[w] = nw[w];
+  }
+
+  uint wsel = 0u;
+  for(int w = 0; w < 4; w++) if(w == (x >> 5)) wsel = row[w];
+  if(((wsel >> uint(x & 31)) & 1u) == 0u){
+    col = vec3(0.0); return vec3(0.0, -20000.0, 0.0);
+  }
+
+  ivec2 cellLo = tlo + ivec2(x * RSP_SUB, t * rowPitch);
+  float fox = rsp_u(pt);
+  float foy = rsp_u(pt);
+  vec2 seat = (vec2(cellLo - wc)
+               + vec2(fox * 0.94 * float(RSP_SUB), foy * 0.94 * float(rowPitch))) * km;
+
+  // activity per cell per sampled row, 0 dead .. ~0.5 boiling
+  float a = (actN > 0) ? float(act) / (float(actN) * float(C)) : 0.0;
+  float heat = clamp(a * 2.6, 0.0, 1.0);
+  col = pal(0.62 - 0.50 * heat * tint,
+            vec3(0.46, 0.44, 0.50), vec3(0.44, 0.42, 0.48),
+            vec3(0.9, 0.85, 1.0), vec3(0.10, 0.30, 0.55))
+        * (0.45 + 1.3 * ink) * (0.45 + flare * (0.25 + 1.5 * heat));
+  col = rsp_stain(col, stain);
+  float z = (rnd.y - 0.5) * 0.02;
+  return vec3(seat.x, -seat.y, z);
+}`
+});
 
 </script>
 
