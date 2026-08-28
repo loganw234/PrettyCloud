@@ -6,7 +6,7 @@ Atlas.registerPlate({
   accent: "#ffd070",
   tex: "\\ddot{\\mathbf{x}}_i=\\sum_{j\\ne i}\\frac{\\mathbf{x}_j-\\mathbf{x}_i}{\\lVert\\mathbf{x}_j-\\mathbf{x}_i\\rVert^{3}},\\qquad T=6.32591398",
   plain: "ẍᵢ = Σ_{j≠i} (xⱼ−xᵢ)/‖xⱼ−xᵢ‖³,   T = 6.32591398",
-  caption: "Three equal masses under Newtonian gravity, the problem Poincaré showed admits no general closed-form solution. Each point carries the exact initial conditions through a Runge–Kutta integration to a random fraction of the period, so brightness is dwell time: the slow arcs of the choreography glow brightest. MODE 0 is the figure-eight, found numerically by Moore in 1993 and proven by Chenciner and Montgomery in 2000, one of the few known stable periodic three-body orbits. MODE 1 is Lagrange's rotating equilateral triangle of 1772, exact but unstable for equal masses: raise PERTURB and the nudge that merely thickens the eight scatters the triangle into escape. TIME LIFT unrolls time upward.",
+  caption: "Three equal masses under Newtonian gravity, the problem Poincaré showed admits no new conserved quantities to solve it with. Each point carries the exact initial conditions through a Runge–Kutta integration to a random fraction of the period, so brightness is dwell time: the slow arcs of the choreography glow brightest. MODE 0 is the figure-eight, found numerically by Moore in 1993 and proven by Chenciner and Montgomery in 2000, one of the few known stable periodic three-body orbits. MODE 1 is Lagrange's rotating equilateral triangle of 1772, exact but unstable for equal masses: raise PERTURB and the nudge that merely thickens the eight scatters the triangle into escape. TIME LIFT unrolls time upward.",
   cam: { dist: 3.1, pitch: 0.5, tgtY: 0.0, rot: 0.03 },
   gain: 0.85,
   params: [

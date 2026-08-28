@@ -6,7 +6,7 @@ Atlas.registerPlate({
   accent: "#b6e08f",
   tex: "\\text{Gyroid: }\\;\\sin x\\cos y+\\sin y\\cos z+\\sin z\\cos x=c",
   plain: "Gyroid:  sin x cos y + sin y cos z + sin z cos x = c",
-  caption: "A surface that tiles space, curving everywhere yet flat on average, with mean curvature zero at every point. These triply-periodic minimal surfaces are what soap films, block copolymers and butterfly-wing photonic crystals settle into. Points are sampled through a block of unit cells and then Newton-projected straight onto the level set, so almost none are wasted and brightness traces the surface's own area. The LEVEL dial thickens or opens the labyrinth; SLAB CUT shears the block away so you can see inside the weave. Colour is the surface normal.",
+  caption: "A surface that tiles space, curving everywhere yet flat on average, with mean curvature zero at every point - drawn here as the trigonometric level set that approximates it. These triply-periodic minimal surfaces are what soap films, block copolymers and butterfly-wing photonic crystals settle into. Points are sampled through a block of unit cells and then Newton-projected straight onto the level set, so almost none are wasted and brightness traces the surface's own area. The LEVEL dial thickens or opens the labyrinth; SLAB CUT shears the block away so you can see inside the weave. Colour is the surface normal.",
   cam: { dist: 3.2, pitch: 0.28, tgtY: 0.0, rot: 0.05 },
   gain: 0.85,
   params: [

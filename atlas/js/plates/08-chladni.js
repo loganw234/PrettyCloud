@@ -6,7 +6,7 @@ Atlas.registerPlate({
   accent: "#e8d98a",
   tex: "\\cos(n\\pi x)\\cos(m\\pi y)\\;\\pm\\;\\cos(m\\pi x)\\cos(n\\pi y)\\;=\\;0",
   plain: "cos(n\u03c0x)cos(m\u03c0y) \u00b1 cos(m\u03c0x)cos(n\u03c0y) = 0",
-  caption: "Sand on a vibrating plate migrates to the curves that do not move \u2014 the nodal lines of a standing-wave eigenmode. Points here brighten exactly where the mode function vanishes, reproducing Chladni's figures of 1787; the RELIEF lever lets you watch the plate itself oscillate around its silent curves. Stepping n and m walks the eigenvalue ladder, and MIX interpolates between the two degenerate combinations.",
+  caption: "Sand on a vibrating plate migrates to the curves that do not move \u2014 the nodal lines of a standing-wave eigenmode. Points here brighten exactly where the mode function vanishes, reproducing Chladni's figures of 1787; the RELIEF lever lets you watch the plate itself oscillate around its silent curves. Stepping n and m walks the membrane's eigenvalue ladder \u2014 the classical stand-in for the stubborn plate equation, as Rayleigh noted \u2014 and MIX interpolates between the two degenerate combinations.",
   cam: { dist: 3.4, pitch: 0.70, tgtY: 0.0, rot: 0.03 },
   gain: 1.2,
   params: [

@@ -6,7 +6,7 @@ Atlas.registerPlate({
   accent: "#ff9a70",
   tex: "\\frac{d^{2}u}{d\\varphi^{2}} = -u + 3u^{2},\\qquad u=\\frac{GM}{c^{2}r},\\qquad b_{c}=3\\sqrt{3}\\,\\frac{GM}{c^{2}}",
   plain: "d²u/dφ² = −u + 3u²,   u = GM/(c²r),   b_c = 3√3 GM/c²",
-  caption: "Parallel light falls past a black hole, each ray integrating the exact null geodesic equation. Distant rays bend by Einstein's 4GM/c²b, the 1.75 arcseconds Eddington measured at the solar limb in 1919. Approaching the critical impact parameter b_c = 3√3 GM/c², they wind ever longer around the unstable circular orbit at r = 3GM/c², then escape pale gold or plunge ember red. Each point is one instant of one ray, laid down uniformly in orbital angle, so brightness measures the winding angle light spends at each radius: the photon sphere ignites by density alone. PLANE 3D fans the orbit planes into the shell whose apparent diameter, 2√27 GM/c², the Event Horizon Telescope resolved around M87*.",
+  caption: "Parallel light falls past a black hole, each ray integrating the exact null geodesic equation. Distant rays bend by Einstein's 4GM/c²b, the 1.75 arcseconds he predicted at the solar limb and Eddington's 1919 expedition confirmed. Approaching the critical impact parameter b_c = 3√3 GM/c², they wind ever longer around the unstable circular orbit at r = 3GM/c², then escape pale gold or plunge ember red. Each point is one instant of one ray, laid down uniformly in orbital angle, so brightness measures the winding angle light spends at each radius: the photon sphere ignites by density alone. PLANE 3D fans the orbit planes into the shell whose apparent diameter, 2√27 GM/c², the Event Horizon Telescope resolved around M87*.",
   cam: { dist: 3.2, pitch: 0.35, tgtY: 0.0, rot: 0.04 },
   gain: 0.9,
   params: [

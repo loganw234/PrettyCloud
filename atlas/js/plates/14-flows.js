@@ -6,7 +6,7 @@ Atlas.registerPlate({
   accent: "#7ad9c4",
   tex: "\\dot{\\mathbf{x}} = \\mathbf{f}(\\mathbf{x}),\\qquad \\text{Lorenz: }\\dot x=\\sigma(y-x),\\;\\dot y=x(\\rho-z)-y,\\;\\dot z=xy-\\beta z",
   plain: "ẋ = f(x)   (Lorenz: ẋ=σ(y−x), ẏ=x(ρ−z)−y, ż=xy−βz)",
-  caption: "Continuous-time chaos. A cloud of initial conditions is integrated forward by Runge–Kutta; each forgets where it began and settles onto the attractor, so brightness is the SRB measure: the long-run fraction of time the flow spends in each region. One dial walks a whole zoo: Lorenz's butterfly, Rössler's scroll, the Aizawa torus-knot, Thomas's cyclic lattice, Halvorsen's braid, Chua's double scroll. Colour reads local speed; the bright cores are where the flow lingers.",
+  caption: "Continuous-time chaos. A cloud of initial conditions is integrated forward by Runge–Kutta; each forgets where it began and settles onto the attractor, so brightness is the SRB measure: the long-run fraction of time the flow spends in each region. One dial walks a whole zoo: Lorenz's butterfly, Rössler's scroll, Langford's torus-knot, Thomas's cyclic lattice, Halvorsen's braid, Chua's double scroll. Colour reads local speed; the bright cores are where the flow lingers.",
   cam: { dist: 3.4, pitch: 0.20, tgtY: 0.0, rot: 0.05 },
   gain: 0.55,
   params: [

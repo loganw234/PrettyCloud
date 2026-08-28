@@ -6,7 +6,7 @@ Atlas.registerPlate({
   accent: "#c0e068",
   tex: "x_{n+1}=r_n x_n(1-x_n),\\quad r_n\\in\\{a,b\\},\\qquad \\lambda=\\tfrac1N\\sum_{n}\\ln|r_n(1-2x_n)|",
   plain: "xₙ₊₁ = rₙxₙ(1−xₙ),  rₙ ∈ {a,b},   λ = ⟨ ln|rₙ(1−2xₙ)| ⟩",
-  caption: "Drive the logistic map with two growth rates a and b taken in turns, the rhythm set by SEQUENCE. At each point (a, b) the Lyapunov exponent λ averages ln|rₙ(1−2xₙ)| over STEPS iterations: where alternation tames the map, λ < 0, and the swallow-shaped bays of stability rise as gold hills of height −λ, scaled by HEIGHT; the chaotic sea lies low, blue and dim. Every point is one uniform sample of the parameter square: density adds no structure here; the sculpture is the graph of λ. Along the diagonal a = b runs the cascade of Plate XIX. Markus charted these in 1989; Dewdney's 1991 column made them famous.",
+  caption: "Drive the logistic map with two growth rates a and b taken in turns, the rhythm set by SEQUENCE. At each point (a, b) the Lyapunov exponent λ averages ln|rₙ(1−2xₙ)| over STEPS iterations: where alternation tames the map, λ < 0, and the swallow-shaped bays of stability rise as gold hills of height −λ, scaled by HEIGHT; the chaotic sea lies low, blue and dim. Every point is one uniform sample of the parameter square: density adds no structure here; the sculpture is the graph of λ. Along the diagonal a = b runs the cascade of Plate XIX. Markus and Hess charted these in 1989; Dewdney's 1991 column made them famous.",
   cam: { dist: 3.4, pitch: 0.55, tgtY: 0.25, rot: 0.03 },
   gain: 0.9,
   params: [
