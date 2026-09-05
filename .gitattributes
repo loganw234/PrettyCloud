@@ -1,0 +1,6 @@
+# LF in the repository whatever the checkout; the screenshots and share
+# cards are what they are.
+* text=auto
+*.json -text
+*.png binary
+*.jpg binary

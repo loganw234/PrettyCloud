@@ -6,8 +6,10 @@ from `gl_VertexID` — the project contains no vertex buffers at all. Points
 are additively accumulated into a floating-point framebuffer and tonemapped,
 so **brightness is a Monte-Carlo density estimate of each object's measure**.
 
-Open `index.html` directly in a browser (no server or build step needed),
-or use the prebuilt single file at `build/atlas-bundled.html`.
+Open `atlas/index.html` directly in a browser (no server or build step
+needed), or use the prebuilt single file at `atlas/build/atlas-bundled.html`.
+The site around it - the front door, the book, the prints - is written by
+`build_site.py` into the repository root and served at prettycloud.io.
 
 ## Run it without a checkout
 
@@ -23,12 +25,12 @@ CDN links, so fully offline the type falls back and formulas show as plain
 LaTeX. Everything that draws is local.
 ## The plates
 
-Fifty-six in all, spanning topology, chaos, number theory, quantum mechanics, general
+Sixty-eight in all, spanning topology, chaos, number theory, quantum mechanics, general
 relativity, ergodic theory, Lie theory, hyperbolic geometry, catastrophe theory — and a
 "Cabinet of Light": eight plates of wave, ray and relativistic optics (plates XLIX–LVI).
 Every parameter on the right is live, and `R` randomizes the current plate's levers.
 
-![Contact sheet of all 56 plates, each labelled with its roman numeral and title](docs/screenshots/atlas.png)
+![Contact sheet of the first fifty-six plates, each labelled with its roman numeral and title; twelve have joined since it was taken](docs/screenshots/atlas.png)
 
 Seven of them full size:
 
@@ -49,17 +51,20 @@ Seven of them full size:
 ## Structure
 
 ```
-index.html            markup + ordered <script> tags
-css/atlas.css         museum-plate styling
-js/core/registry.js   Atlas namespace, plate registration, shader assembly
-js/core/glsl-lib.js   shared GLSL (vertex main, tonemap, trails)
-js/core/renderer.js   GL state, per-pair shader cache, accumulation, PNG export
-shader-bisect.html    diagnostic: times shader compilation per plate subset
-js/core/camera.js     orbit camera with inertia
-js/core/ui.js         placard, lever racks, telemetry, keyboard
-js/core/main.js       state machine + frame loop
-js/plates/NN-*.js     one file per plate
-build.py              bundles everything into build/atlas-bundled.html
+build_site.py               the front door, the book, the prints, the about page - one shell
+p/<id>/                     one landing page per plate, where a printed card's QR arrives
+og/                         the share cards
+atlas/index.html            the atlas: markup + ordered <script> tags
+atlas/css/atlas.css         museum-plate styling
+atlas/js/core/registry.js   Atlas namespace, plate registration, shader assembly
+atlas/js/core/glsl-lib.js   shared GLSL (vertex main, tonemap, trails)
+atlas/js/core/renderer.js   GL state, per-pair shader cache, accumulation, PNG export
+atlas/js/core/camera.js     orbit camera with inertia
+atlas/js/core/ui.js         placard, lever racks, telemetry, keyboard
+atlas/js/core/main.js       state machine + frame loop
+atlas/js/plates/NN-*.js     one file per plate: the editorial half here, the shape half emitted by atlas-engine
+atlas/shader-bisect.html    diagnostic: times shader compilation per plate subset
+atlas/build.py              bundles the atlas into atlas/build/atlas-bundled.html
 ```
 
 Plain script tags and a `globalThis.Atlas` namespace are used instead of ES
@@ -68,8 +73,23 @@ this way the page works straight off the disk.
 
 ## Adding a plate
 
-Create `js/plates/49-yourthing.js` and add one `<script>` tag to
-`index.html` (before the core engine scripts). That's the whole process.
+Since 2026-08-23 a plate is two halves in two repositories, and neither
+owns both. The **shape** - the GLSL, the levers, the camera home, the
+gain and the accent - is a *positive* in
+[atlas-engine](https://github.com/loganw234/atlas-engine): a small
+JavaScript program the engine's CPU evaluator runs and its emitter reads,
+writing `shape_<id>` GLSL that is deterministic by construction. The
+**editorial** half - name, roman numeral, formula, caption and the
+plate's place in the order - lives here, in `atlas/js/plates/NN-<id>.js`,
+registered with one `<script>` tag in `atlas/index.html` before the core
+scripts. The darkroom merges the two into the registry every print is
+made from, and refuses a plate that has only one half.
+
+So: write the positive first (the engine's `docs/CONVERSION.md` says how,
+and `docs/TEMPLATE.pos.mjs` is a real one to copy), emit it, and register
+it here with the fields below. The example keeps its shape inline, which
+is how every plate was written before the split and how the page still
+reads them.
 
 ```js
 Atlas.registerPlate({
@@ -131,6 +151,25 @@ clipped (see plate XII).
   GPU; a desktop GPU (the project was aimed at an RTX 5060 Ti) reaches
   2^23 in about two seconds and holds 60 fps on most plates. 2^27 points
   is real work — expect ~8 GB/s of raster traffic at the top of the lever.
+
+## The family
+
+- [atlas-engine](https://github.com/loganw234/atlas-engine) - the plate
+  language: a positive states a subject, and the emitter writes
+  deterministic GLSL from it; it owns the shape half of every plate here.
+  Public, MIT.
+- [atlas-film](https://github.com/loganw234/atlas-film) - the medium:
+  stocks, grain, the colour chain, papers and processes, as numbers with
+  provenance. Public, MIT.
+- [cft-fp256](https://github.com/loganw234/cft-fp256) - a deterministic
+  IEEE 754-2019 coprocessor; a sibling in method rather than in code.
+  Public, Apache-2.0.
+- atlas-optical - the glass: the traced lens registry and the exact ray
+  tracer that referees it. Private until its historic sources have
+  answered.
+- atlas-darkroom - the print engine pointed at these same objects, and the
+  commons that renders the largest of them; its public face is
+  [platonography.com](https://platonography.com). Private.
 
 ## Licence
 
